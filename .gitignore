@@ -1,0 +1,57 @@
+# Binary
+kselect
+kselect-*
+
+# Go build
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+*.pprof
+
+# Go workspace
+vendor/
+go.work
+go.work.sum
+
+# Go coverage
+*.coverprofile
+coverage.out
+coverage.html
+
+# Go debug
+__debug_bin*
+debug
+debug.test
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Environment
+.env
+.env.*
+*.pem
+*.key
+
+# AI / Claude
+CLAUDE.md
+.claude/
+.cursorrules
+.cursor/
+.github/copilot-instructions.md

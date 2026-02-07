@@ -1,0 +1,36 @@
+name: certificate
+aliases:
+  - certificates
+  - cert
+group: cert-manager.io
+version: v1
+resource: certificates
+fields:
+  name:
+    jsonpath: "{.metadata.name}"
+    type: string
+    description: Certificate name
+  namespace:
+    jsonpath: "{.metadata.namespace}"
+    type: string
+    description: Namespace
+  ready:
+    jsonpath: "{.status.conditions[?(@.type=='Ready')].status}"
+    type: string
+    description: Ready status
+  secret:
+    jsonpath: "{.spec.secretName}"
+    type: string
+    description: Secret name
+  issuer:
+    jsonpath: "{.spec.issuerRef.name}"
+    type: string
+    description: Issuer name
+  dns-names:
+    jsonpath: "{.spec.dnsNames}"
+    type: list
+    description: DNS names
+  not-after:
+    jsonpath: "{.status.notAfter}"
+    type: time
+    description: Expiration date
