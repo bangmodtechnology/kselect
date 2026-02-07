@@ -49,6 +49,7 @@ type Query struct {
 	Limit         int
 	Offset        int
 	Distinct      bool
+	UseDefault    bool // true when user omits field list
 }
 
 func Parse(input string) (*Query, error) {
@@ -70,6 +71,11 @@ func Parse(input string) (*Query, error) {
 
 	fieldStr := strings.TrimSpace(input[:fromIdx])
 	rest := strings.TrimSpace(input[fromIdx+4:]) // skip "FROM"
+
+	// No fields specified → use default fields
+	if fieldStr == "" {
+		query.UseDefault = true
+	}
 
 	// Parse DISTINCT
 	if strings.HasPrefix(strings.ToUpper(fieldStr), "DISTINCT ") {

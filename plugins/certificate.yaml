@@ -5,6 +5,12 @@ aliases:
 group: cert-manager.io
 version: v1
 resource: certificates
+default_fields:
+  - name
+  - ready
+  - secret
+  - issuer
+  - not-after
 fields:
   name:
     jsonpath: "{.metadata.name}"
@@ -14,6 +20,8 @@ fields:
     jsonpath: "{.metadata.namespace}"
     type: string
     description: Namespace
+    aliases:
+      - ns
   ready:
     jsonpath: "{.status.conditions[?(@.type=='Ready')].status}"
     type: string

@@ -161,6 +161,54 @@ func TestParseNoFrom(t *testing.T) {
 	}
 }
 
+func TestParseNoFieldsUseDefault(t *testing.T) {
+	query, err := Parse("FROM pod WHERE namespace=default")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if !query.UseDefault {
+		t.Error("Expected UseDefault to be true")
+	}
+	if query.Resource != "pod" {
+		t.Errorf("Expected resource 'pod', got '%s'", query.Resource)
+	}
+	if query.Namespace != "default" {
+		t.Errorf("Expected namespace 'default', got '%s'", query.Namespace)
+	}
+}
+
+func TestParseNoFieldsNoWhere(t *testing.T) {
+	query, err := Parse("FROM deployment")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if !query.UseDefault {
+		t.Error("Expected UseDefault to be true")
+	}
+	if query.Resource != "deployment" {
+		t.Errorf("Expected resource 'deployment', got '%s'", query.Resource)
+	}
+}
+
+func TestParseNamespaceAliasNs(t *testing.T) {
+	query, err := Parse("name FROM pod WHERE ns=production")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if query.Namespace != "production" {
+		t.Errorf("Expected namespace 'production' from alias 'ns', got '%s'", query.Namespace)
+	}
+	if query.Conditions == nil {
+		t.Fatal("Expected conditions to be parsed")
+	}
+	if len(query.Conditions.Conditions) != 1 {
+		t.Fatalf("Expected 1 condition, got %d", len(query.Conditions.Conditions))
+	}
+	if query.Conditions.Conditions[0].Field != "ns" {
+		t.Errorf("Expected condition field 'ns', got '%s'", query.Conditions.Conditions[0].Field)
+	}
+}
+
 func TestParseMultipleOrderBy(t *testing.T) {
 	query, err := Parse("namespace,name FROM pod ORDER BY namespace ASC, name DESC")
 	if err != nil {

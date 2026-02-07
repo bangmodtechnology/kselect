@@ -53,6 +53,9 @@ func (e *Executor) Execute(query *parser.Query) ([]map[string]interface{}, []str
 		return nil, nil, fmt.Errorf("unknown resource: %s (use --list to see available resources)", query.Resource)
 	}
 
+	// Resolve field aliases in query (e.g. "ns" → "namespace")
+	resolveQueryAliases(query, resDef)
+
 	// Fetch resources from K8s
 	items, err := e.fetchResources(resDef, query)
 	if err != nil {
@@ -137,6 +140,11 @@ func (e *Executor) fetchResources(resDef *registry.ResourceDefinition, query *pa
 }
 
 func (e *Executor) resolveFields(query *parser.Query, resDef *registry.ResourceDefinition) []string {
+	// Use default fields when user omits field list
+	if query.UseDefault && len(resDef.DefaultFields) > 0 {
+		return resDef.DefaultFields
+	}
+
 	if len(query.Fields) == 1 && query.Fields[0] == "*" {
 		var fields []string
 		for name := range resDef.Fields {
@@ -145,6 +153,17 @@ func (e *Executor) resolveFields(query *parser.Query, resDef *registry.ResourceD
 		sort.Strings(fields)
 		return fields
 	}
+
+	// Fallback: if fields is empty and no defaults, show all
+	if len(query.Fields) == 0 {
+		var fields []string
+		for name := range resDef.Fields {
+			fields = append(fields, name)
+		}
+		sort.Strings(fields)
+		return fields
+	}
+
 	return query.Fields
 }
 
@@ -243,6 +262,43 @@ func applyLimitOffset(results []map[string]interface{}, limit, offset int) []map
 	}
 
 	return results
+}
+
+// resolveQueryAliases resolves field aliases (e.g. "ns" → "namespace") throughout the query.
+func resolveQueryAliases(query *parser.Query, resDef *registry.ResourceDefinition) {
+	// Resolve aliases in selected fields
+	for i, f := range query.Fields {
+		query.Fields[i] = resDef.ResolveFieldAlias(f)
+	}
+
+	// Resolve aliases in WHERE conditions
+	if query.Conditions != nil {
+		resolveConditionAliases(query.Conditions, resDef)
+	}
+
+	// Resolve aliases in ORDER BY
+	for i, ob := range query.OrderBy {
+		query.OrderBy[i].Field = resDef.ResolveFieldAlias(ob.Field)
+	}
+
+	// Resolve aliases in GROUP BY
+	for i, gb := range query.GroupBy {
+		query.GroupBy[i] = resDef.ResolveFieldAlias(gb)
+	}
+
+	// Resolve aliases in HAVING
+	if query.Having != nil {
+		resolveConditionAliases(query.Having, resDef)
+	}
+}
+
+func resolveConditionAliases(group *parser.ConditionGroup, resDef *registry.ResourceDefinition) {
+	for i, cond := range group.Conditions {
+		group.Conditions[i].Field = resDef.ResolveFieldAlias(cond.Field)
+	}
+	for _, sub := range group.SubGroups {
+		resolveConditionAliases(sub, resDef)
+	}
 }
 
 func applyDistinct(results []map[string]interface{}, fields []string) []map[string]interface{} {

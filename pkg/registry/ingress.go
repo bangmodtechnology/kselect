@@ -11,6 +11,7 @@ func init() {
 			Version:  "v1",
 			Resource: "ingresses",
 		},
+		DefaultFields: []string{"name", "class", "host", "address", "age"},
 		Fields: map[string]FieldDefinition{
 			"name": {
 				Name:        "name",
@@ -20,6 +21,7 @@ func init() {
 			},
 			"namespace": {
 				Name:        "namespace",
+				Aliases:     []string{"ns"},
 				JSONPath:    "{.metadata.namespace}",
 				Description: "Namespace",
 				Type:        "string",

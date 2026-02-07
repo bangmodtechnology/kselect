@@ -10,18 +10,20 @@ import (
 )
 
 type pluginDefinition struct {
-	Name     string                     `yaml:"name"`
-	Aliases  []string                   `yaml:"aliases"`
-	Group    string                     `yaml:"group"`
-	Version  string                     `yaml:"version"`
-	Resource string                     `yaml:"resource"`
-	Fields   map[string]pluginFieldDef  `yaml:"fields"`
+	Name          string                    `yaml:"name"`
+	Aliases       []string                  `yaml:"aliases"`
+	Group         string                    `yaml:"group"`
+	Version       string                    `yaml:"version"`
+	Resource      string                    `yaml:"resource"`
+	DefaultFields []string                  `yaml:"default_fields"`
+	Fields        map[string]pluginFieldDef `yaml:"fields"`
 }
 
 type pluginFieldDef struct {
-	JSONPath    string `yaml:"jsonpath"`
-	Type        string `yaml:"type"`
-	Description string `yaml:"description"`
+	JSONPath    string   `yaml:"jsonpath"`
+	Type        string   `yaml:"type"`
+	Description string   `yaml:"description"`
+	Aliases     []string `yaml:"aliases"`
 }
 
 func LoadPlugins(dir string) error {
@@ -63,6 +65,7 @@ func loadPlugin(path string) error {
 	for name, f := range plugin.Fields {
 		fields[name] = FieldDefinition{
 			Name:        name,
+			Aliases:     f.Aliases,
 			JSONPath:    f.JSONPath,
 			Description: f.Description,
 			Type:        f.Type,
@@ -77,7 +80,8 @@ func loadPlugin(path string) error {
 			Version:  plugin.Version,
 			Resource: plugin.Resource,
 		},
-		Fields: fields,
+		DefaultFields: plugin.DefaultFields,
+		Fields:        fields,
 	}
 
 	GetGlobalRegistry().Register(def)
