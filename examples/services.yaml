@@ -1,0 +1,88 @@
+# Frontend - LoadBalancer (external traffic)
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  namespace: kselect-demo
+  labels:
+    app: nginx
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+    - name: https
+      port: 443
+      targetPort: 80
+---
+# Backend API - ClusterIP (internal only)
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: kselect-demo
+  labels:
+    app: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+# Redis - ClusterIP
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: kselect-demo
+  labels:
+    app: redis
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+# PostgreSQL - ClusterIP
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: kselect-demo
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+# NodePort service for debugging
+apiVersion: v1
+kind: Service
+metadata:
+  name: debug-nodeport
+  namespace: kselect-demo
+  labels:
+    app: backend
+spec:
+  type: NodePort
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 30080

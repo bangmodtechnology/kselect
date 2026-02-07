@@ -1,0 +1,204 @@
+# Web frontend - nginx
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-frontend
+  namespace: kselect-demo
+  labels:
+    app: nginx
+    tier: frontend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: nginx
+        tier: frontend
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.25-alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+# Backend API
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-api
+  namespace: kselect-demo
+  labels:
+    app: backend
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: backend
+        tier: backend
+    spec:
+      serviceAccountName: backend-sa
+      containers:
+        - name: api
+          image: node:20-alpine
+          command: ["node", "server.js"]
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: db-credentials
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+# Background worker
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: kselect-demo
+  labels:
+    app: worker
+    tier: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: worker
+        tier: backend
+    spec:
+      serviceAccountName: worker-sa
+      containers:
+        - name: worker
+          image: python:3.12-slim
+          command: ["python", "worker.py"]
+          envFrom:
+            - configMapRef:
+                name: app-config
+          resources:
+            requests:
+              cpu: 200m
+              memory: 128Mi
+            limits:
+              cpu: 400m
+              memory: 256Mi
+---
+# Redis cache
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: kselect-demo
+  labels:
+    app: redis
+    tier: cache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: redis
+        tier: cache
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: redis-config
+              mountPath: /usr/local/etc/redis
+      volumes:
+        - name: redis-config
+          configMap:
+            name: redis-config
+---
+# PostgreSQL database
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: kselect-demo
+  labels:
+    app: postgres
+    tier: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: postgres
+        tier: database
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+            - name: POSTGRES_DB
+              value: appdb
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

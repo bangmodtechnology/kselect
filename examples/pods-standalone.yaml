@@ -1,0 +1,93 @@
+# Standalone pods (ไม่ได้สร้างจาก Deployment) สำหรับทดสอบ query ที่หลากหลาย
+
+# Pod ปกติ
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug-pod
+  namespace: kselect-demo
+  labels:
+    app: debug
+    tier: tools
+spec:
+  containers:
+    - name: debug
+      image: busybox:latest
+      command: ["sleep", "3600"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
+---
+# Pod with multiple containers (sidecar pattern)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-with-sidecar
+  namespace: kselect-demo
+  labels:
+    app: sidecar-demo
+    tier: backend
+spec:
+  containers:
+    - name: app
+      image: nginx:1.25-alpine
+      ports:
+        - containerPort: 80
+      resources:
+        requests:
+          cpu: 100m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi
+    - name: log-collector
+      image: fluent/fluent-bit:latest
+      resources:
+        requests:
+          cpu: 50m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
+---
+# Pod ที่จะ fail (image ไม่มี) - ทดสอบ status filter
+apiVersion: v1
+kind: Pod
+metadata:
+  name: failing-pod
+  namespace: kselect-demo
+  labels:
+    app: failing
+    tier: test
+spec:
+  containers:
+    - name: bad
+      image: nonexistent-image:v999
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+---
+# Completed job pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: batch-job
+  namespace: kselect-demo
+  labels:
+    app: batch
+    tier: jobs
+spec:
+  restartPolicy: OnFailure
+  containers:
+    - name: job
+      image: busybox:latest
+      command: ["echo", "job completed"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 32Mi
