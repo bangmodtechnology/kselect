@@ -59,8 +59,8 @@ func Parse(input string) (*Query, error) {
 
 	input = strings.TrimSpace(input)
 
-	// Strip optional SELECT keyword
-	selectRe := regexp.MustCompile(`(?i)^SELECT\s+`)
+	// Strip optional SELECT or KSELECT keyword prefix
+	selectRe := regexp.MustCompile(`(?i)^(SELECT|KSELECT)\s+`)
 	input = selectRe.ReplaceAllString(input, "")
 
 	// Find FROM keyword to split fields and the rest

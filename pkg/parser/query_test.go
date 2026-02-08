@@ -300,6 +300,61 @@ func TestParseNamespaceAliasNs(t *testing.T) {
 	}
 }
 
+func TestParseWithKselectPrefix(t *testing.T) {
+	// kselect keyword prefix should also be stripped (like SELECT)
+	query, err := Parse("kselect name,status FROM pod WHERE namespace=default")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if len(query.Fields) != 2 {
+		t.Errorf("Expected 2 fields, got %d", len(query.Fields))
+	}
+	if query.Fields[0] != "name" {
+		t.Errorf("Expected field 'name', got '%s'", query.Fields[0])
+	}
+	if query.Resource != "pod" {
+		t.Errorf("Expected resource 'pod', got '%s'", query.Resource)
+	}
+}
+
+func TestParseSubQueryWithKselectPrefix(t *testing.T) {
+	// Subquery inside IN should support kselect prefix
+	group, err := ParseConditions("name IN (kselect name FROM pod WHERE status=Running)")
+	if err != nil {
+		t.Fatalf("ParseConditions failed: %v", err)
+	}
+	if len(group.Conditions) != 1 {
+		t.Fatalf("Expected 1 condition, got %d", len(group.Conditions))
+	}
+	c := group.Conditions[0]
+	if c.SubQuery == nil {
+		t.Fatal("Expected SubQuery to be set")
+	}
+	if c.SubQuery.Resource != "pod" {
+		t.Errorf("Expected subquery resource 'pod', got '%s'", c.SubQuery.Resource)
+	}
+	if len(c.SubQuery.Fields) != 1 || c.SubQuery.Fields[0] != "name" {
+		t.Errorf("Expected subquery fields [name], got %v", c.SubQuery.Fields)
+	}
+}
+
+func TestParseSubQueryNotInWithKselectPrefix(t *testing.T) {
+	group, err := ParseConditions("name NOT IN (kselect name FROM deployment)")
+	if err != nil {
+		t.Fatalf("ParseConditions failed: %v", err)
+	}
+	c := group.Conditions[0]
+	if c.Operator != OpNotIn {
+		t.Errorf("Expected NOT IN, got '%s'", c.Operator)
+	}
+	if c.SubQuery == nil {
+		t.Fatal("Expected SubQuery to be set")
+	}
+	if c.SubQuery.Resource != "deployment" {
+		t.Errorf("Expected subquery resource 'deployment', got '%s'", c.SubQuery.Resource)
+	}
+}
+
 func TestParseMultipleOrderBy(t *testing.T) {
 	query, err := Parse("namespace,name FROM pod ORDER BY namespace ASC, name DESC")
 	if err != nil {

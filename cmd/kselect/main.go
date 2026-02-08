@@ -246,6 +246,10 @@ func printHelp() {
 	fmt.Println("  # Watch mode")
 	fmt.Println("  kselect name,status FROM pod -n default --watch")
 	fmt.Println()
+	fmt.Println("  # Subquery")
+	fmt.Println("  kselect name,status FROM pod WHERE name IN (kselect name FROM deployment)")
+	fmt.Println("  kselect name FROM pod WHERE name NOT IN (kselect name FROM service)")
+	fmt.Println()
 	fmt.Println("  # Join")
 	fmt.Println("  kselect pod.name,svc.name FROM pod INNER JOIN service svc ON pod.label.app = svc.selector.app")
 }
