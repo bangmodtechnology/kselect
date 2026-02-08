@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bangmodtechnology/kselect/pkg/completion"
 	"github.com/bangmodtechnology/kselect/pkg/executor"
 	"github.com/bangmodtechnology/kselect/pkg/output"
 	"github.com/bangmodtechnology/kselect/pkg/parser"
@@ -60,6 +61,24 @@ func main() {
 
 	if *listResources {
 		printResources()
+		return
+	}
+
+	// Subcommand: completion
+	if len(queryArgs) > 0 && queryArgs[0] == "completion" {
+		if len(queryArgs) < 2 {
+			fmt.Println("Usage: kselect completion [bash|zsh]")
+			os.Exit(0)
+		}
+		switch queryArgs[1] {
+		case "bash":
+			completion.GenerateBash(os.Stdout)
+		case "zsh":
+			completion.GenerateZsh(os.Stdout)
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown shell: %s (use bash or zsh)\n", queryArgs[1])
+			os.Exit(1)
+		}
 		return
 	}
 
@@ -252,4 +271,8 @@ func printHelp() {
 	fmt.Println()
 	fmt.Println("  # Join")
 	fmt.Println("  kselect pod.name,svc.name FROM pod INNER JOIN service svc ON pod.label.app = svc.selector.app")
+	fmt.Println()
+	fmt.Println("  # Shell completion")
+	fmt.Println("  source <(kselect completion bash)   # bash")
+	fmt.Println("  source <(kselect completion zsh)    # zsh")
 }
