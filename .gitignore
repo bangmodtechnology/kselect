@@ -1,6 +1,6 @@
-# Binary
-kselect
-kselect-*
+# Binary (at root only, not cmd/kselect/)
+/kselect
+/kselect-*
 
 # Go build
 *.exe
