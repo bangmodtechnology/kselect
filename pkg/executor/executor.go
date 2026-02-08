@@ -209,9 +209,13 @@ func (e *Executor) extractField(obj *unstructured.Unstructured, jsonPath string)
 	path = strings.TrimSuffix(path, "}")
 
 	parts := strings.Split(path, ".")
-	var current interface{} = obj.Object
+	return extractFromValue(obj.Object, parts)
+}
 
-	for _, part := range parts {
+// extractFromValue navigates a nested structure following the given path parts.
+// Supports [*] to iterate over arrays and continue extracting sub-paths.
+func extractFromValue(current interface{}, parts []string) interface{} {
+	for i, part := range parts {
 		if strings.Contains(part, "[*]") {
 			part = strings.TrimSuffix(part, "[*]")
 			m, ok := current.(map[string]interface{})
@@ -222,11 +226,29 @@ func (e *Executor) extractField(obj *unstructured.Unstructured, jsonPath string)
 			if !ok {
 				return nil
 			}
-			// Return array values
-			if slice, ok := arr.([]interface{}); ok {
+			slice, ok := arr.([]interface{})
+			if !ok {
+				return arr
+			}
+
+			// If no remaining path, return the array as-is
+			remaining := parts[i+1:]
+			if len(remaining) == 0 {
 				return slice
 			}
-			return arr
+
+			// Drill into each element with remaining path
+			var results []interface{}
+			for _, item := range slice {
+				val := extractFromValue(item, remaining)
+				if val != nil {
+					results = append(results, val)
+				}
+			}
+			if len(results) == 1 {
+				return results[0]
+			}
+			return results
 		}
 
 		m, ok := current.(map[string]interface{})
