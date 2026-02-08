@@ -11,6 +11,7 @@ func init() {
 			Version:  "v1",
 			Resource: "services",
 		},
+		Namespaced:    true,
 		DefaultFields: []string{"name", "type", "cluster-ip", "port", "age"},
 		Fields: map[string]FieldDefinition{
 			"name": {

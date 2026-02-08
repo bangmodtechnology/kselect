@@ -8,24 +8,24 @@ kselect name,status,ip FROM pod WHERE namespace=default
 
 ## Why kselect?
 
-ถ้าคุณเคยใช้ `kubectl get pods` แล้วต้อง pipe ผ่าน `grep`, `awk`, `jq` หลายชั้นเพื่อหาข้อมูลที่ต้องการ — kselect ช่วยให้ทำสิ่งเดียวกันด้วยคำสั่งเดียว
+If you've ever used `kubectl get pods` and had to pipe through `grep`, `awk`, `jq` multiple times to find the data you need — kselect lets you do the same thing in a single command.
 
-**ปัญหาที่เจอบ่อย:**
+**The problem:**
 
 ```bash
-# แบบเดิม: หา pod ที่ restart เยอะใน production
+# Traditional: find pods with high restarts in production
 kubectl get pods -n production -o json | jq -r '.items[] | select(.status.containerStatuses[0].restartCount > 5) | [.metadata.name, .status.containerStatuses[0].restartCount] | @tsv' | sort -k2 -rn | head -5
 
-# แบบ kselect: อ่านง่าย เขียนเร็ว
+# With kselect: readable and fast
 kselect name,restarts FROM pod WHERE namespace=production AND restarts > 5 ORDER BY restarts DESC LIMIT 5
 ```
 
-**แนวคิดหลัก:**
-- ใช้ syntax ที่คุ้นเคยแบบ SQL — ไม่ต้องจำ JSONPath หรือ jq syntax
-- เลือกเฉพาะ field ที่ต้องการ ไม่ต้องดูข้อมูลทั้งหมด
-- Filter, Sort, Aggregate ได้ในคำสั่งเดียว
-- รองรับ JOIN ข้ามประเภท resource (เช่น pod กับ service)
-- ขยาย resource ใหม่ผ่าน YAML plugin ได้โดยไม่ต้องแก้โค้ด
+**Key concepts:**
+- Familiar SQL-like syntax — no need to memorize JSONPath or jq syntax
+- Select only the fields you need
+- Filter, Sort, Aggregate in a single command
+- JOIN across resource types (e.g. pod with service)
+- Extend with new resources via YAML plugins without modifying code
 
 ## How It Works
 
@@ -35,28 +35,28 @@ kselect name,status FROM pod WHERE namespace=default AND status!=Running ORDER B
        fields          resource              conditions                       sorting     limit
 ```
 
-kselect แปลง query เป็นการเรียก Kubernetes API โดยอัตโนมัติ:
+kselect automatically translates your query into Kubernetes API calls:
 
-1. **Parse** — แยก query ออกเป็น fields, resource, conditions
-2. **Registry** — หา resource definition (GVR + field-to-JSONPath mapping)
-3. **Execute** — เรียก K8s API ผ่าน dynamic client เพื่อดึง resource
-4. **Filter** — กรองผลลัพธ์ตาม WHERE conditions ฝั่ง client
+1. **Parse** — Break the query into fields, resource, and conditions
+2. **Registry** — Look up the resource definition (GVR + field-to-JSONPath mapping)
+3. **Execute** — Call the K8s API via dynamic client to fetch resources
+4. **Filter** — Apply WHERE conditions client-side
 5. **Transform** — JOIN, Aggregate, Sort, Paginate
-6. **Output** — แสดงผลในรูปแบบที่เลือก (table, json, yaml, csv)
+6. **Output** — Display results in the chosen format (table, json, yaml, csv)
 
 ## Quick Start
 
 ```bash
-# ดู resources และ fields ที่รองรับ
+# List supported resources and fields
 kselect -list
 
-# Query แรก
+# Your first query
 kselect name,status,ip FROM pod WHERE namespace=default
 
-# Export เป็น JSON
+# Export as JSON
 kselect name,status FROM pod -o json
 
-# Monitor แบบ real-time
+# Real-time monitoring
 kselect name,status,restarts FROM pod --watch
 ```
 
@@ -135,8 +135,9 @@ postgres           1          1       1
 # Services with ports
 kselect name,type,cluster-ip,port FROM service WHERE namespace=default
 
-# All fields
-kselect * FROM pod WHERE namespace=default
+# Default fields (use * or omit fields entirely)
+kselect * FROM pod WHERE ns=default
+kselect FROM pod WHERE ns=default
 ```
 
 ### WHERE Conditions
@@ -333,21 +334,41 @@ kselect name,ready FROM deployment --watch --interval 5s
 
 ## Available Resources
 
-| Resource | Aliases | Key Fields |
-|----------|---------|------------|
-| pod | pods, po | name, namespace, status, ip, node, image, restarts, cpu.req, cpu.limit, mem.req, mem.limit, age, labels |
-| deployment | deployments, deploy | name, namespace, replicas, ready, available, updated, image, strategy, age, labels |
-| service | services, svc | name, namespace, type, cluster-ip, external-ip, port, targetport, selector, age |
-| ingress | ingresses, ing | name, namespace, class, host, address, age |
-| configmap | configmaps, cm | name, namespace, data-keys, age |
-| secret | secrets | name, namespace, type, data-keys, age |
-| serviceaccount | serviceaccounts, sa | name, namespace, secrets, age |
+| Resource | Aliases | Default Fields | All Fields |
+|----------|---------|----------------|------------|
+| pod | pods, po | name, status, ip, node, restarts, age | + namespace, image, cpu.req, cpu.limit, mem.req, mem.limit, labels |
+| deployment | deployments, deploy | name, replicas, ready, available, age | + namespace, updated, image, strategy, labels |
+| service | services, svc | name, type, cluster-ip, port, age | + namespace, external-ip, targetport, selector |
+| ingress | ingresses, ing | name, class, host, address, age | + namespace |
+| configmap | configmaps, cm | name, data-keys, age | + namespace |
+| secret | secrets | name, type, age | + namespace, data-keys |
+| serviceaccount | serviceaccounts, sa | name, secrets, age | + namespace |
+| node | nodes, no | name, status, roles, version, internal-ip, age | + external-ip, os, kernel, container-runtime, cpu, memory, pods, arch, labels |
+| gateway | gateways, gw | name, class, addresses, programmed, age | + namespace, listeners, labels |
+
+`*` or omitting fields will display the Default Fields for that resource.
 
 Run `kselect -list` to see all available resources and fields.
 
+## Field Aliases
+
+WHERE conditions support Kubernetes API short names:
+
+| Alias | Full Name |
+|-------|-----------|
+| ns | namespace |
+
+```bash
+# Both are equivalent
+kselect * FROM pod WHERE ns=default
+kselect * FROM pod WHERE namespace=default
+```
+
+Aliases work in WHERE, ORDER BY, GROUP BY, and HAVING clauses.
+
 ## Real-World Use Cases
 
-### Troubleshooting: หา pod ที่มีปัญหา
+### Troubleshooting: Find problematic pods
 
 ```bash
 $ kselect name,status,node FROM pod WHERE namespace=production AND status!=Running
@@ -362,14 +383,14 @@ pending-pod-def34              Pending             <none>
 ```
 
 ```bash
-# Pod ที่ restart บ่อย
+# Pods with frequent restarts
 kselect name,restarts,status FROM pod WHERE restarts > 10 ORDER BY restarts DESC
 
-# Pod ที่ใช้ image เก่า
+# Pods using outdated images
 kselect name,image FROM pod WHERE image LIKE '%:latest%'
 ```
 
-### Capacity Planning: ดู resource usage
+### Capacity Planning: View resource usage
 
 ```bash
 $ kselect name,cpu.req,mem.req,cpu.limit,mem.limit FROM pod WHERE namespace=production LIMIT 4
@@ -396,11 +417,11 @@ worker             2          0
 ```
 
 ```bash
-# Export เป็น CSV เพื่อวิเคราะห์ต่อ
+# Export as CSV for further analysis
 kselect name,cpu.req,mem.req FROM pod -o csv > resources.csv
 ```
 
-### Networking: ตรวจสอบ service/ingress
+### Networking: Inspect services and ingresses
 
 ```bash
 $ kselect name,type,cluster-ip,port FROM service WHERE namespace=default
@@ -417,21 +438,44 @@ debug-nodeport     NodePort       10.96.100.50     8080
 ```
 
 ```bash
-# ดู ingress ทั้งหมดพร้อม host
+# List all ingresses with hosts
 kselect name,host,class FROM ingress -o wide
 
-# หา service ที่เชื่อม pod
+# Find services connected to pods
 kselect pod.name,pod.ip,svc.name,svc.port \
   FROM pod INNER JOIN service svc ON pod.label.app = svc.selector.app
 ```
 
-### Security: ตรวจสอบ secrets/configmaps
+### Infrastructure: View nodes and gateways
 
 ```bash
-# Secret ทุกประเภท
+# List all nodes
+$ kselect * FROM node
+```
+```
+NAME        STATUS   ROLES          VERSION   INTERNAL-IP    AGE
+node-1      Ready    control-plane  v1.29.1   192.168.1.10   30d
+node-2      Ready    worker         v1.29.1   192.168.1.11   30d
+node-3      Ready    worker         v1.29.1   192.168.1.12   25d
+
+3 resource(s) found.
+```
+
+```bash
+# Node capacity
+kselect name,cpu,memory,pods FROM no
+
+# Gateway API resources
+kselect * FROM gw WHERE ns=default
+```
+
+### Security: Inspect secrets and configmaps
+
+```bash
+# All secret types
 kselect name,type FROM secret WHERE namespace=production
 
-# ConfigMap ที่มี key เยอะ
+# ConfigMaps with many keys
 kselect name,data-keys FROM configmap WHERE namespace=default -o wide
 ```
 

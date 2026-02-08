@@ -11,6 +11,7 @@ func init() {
 			Version:  "v1",
 			Resource: "configmaps",
 		},
+		Namespaced:    true,
 		DefaultFields: []string{"name", "data-keys", "age"},
 		Fields: map[string]FieldDefinition{
 			"name": {

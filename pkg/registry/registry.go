@@ -8,6 +8,7 @@ type ResourceDefinition struct {
 	Name                 string
 	Aliases              []string
 	GroupVersionResource schema.GroupVersionResource
+	Namespaced           bool     // true = namespaced, false = cluster-scoped (e.g. node)
 	DefaultFields        []string // fields shown when user omits field list
 	Fields               map[string]FieldDefinition
 }

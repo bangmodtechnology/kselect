@@ -11,6 +11,7 @@ func init() {
 			Version:  "v1",
 			Resource: "pods",
 		},
+		Namespaced:    true,
 		DefaultFields: []string{"name", "status", "ip", "node", "restarts", "age"},
 		Fields: map[string]FieldDefinition{
 			"name": {

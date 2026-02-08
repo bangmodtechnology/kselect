@@ -127,7 +127,10 @@ func (e *Executor) fetchResources(resDef *registry.ResourceDefinition, query *pa
 	var list *unstructured.UnstructuredList
 	var err error
 
-	if query.Namespace == "*" || query.Namespace == "" {
+	if !resDef.Namespaced {
+		// Cluster-scoped resource (e.g. node)
+		list, err = e.dynamicClient.Resource(gvr).List(context.TODO(), listOptions)
+	} else if query.Namespace == "*" || query.Namespace == "" {
 		list, err = e.dynamicClient.Resource(gvr).Namespace("").List(context.TODO(), listOptions)
 	} else {
 		list, err = e.dynamicClient.Resource(gvr).Namespace(query.Namespace).List(context.TODO(), listOptions)
@@ -142,18 +145,35 @@ func (e *Executor) fetchResources(resDef *registry.ResourceDefinition, query *pa
 func (e *Executor) resolveFields(query *parser.Query, resDef *registry.ResourceDefinition) []string {
 	// * or empty → use DefaultFields, fallback to all fields
 	if len(query.Fields) == 0 || (len(query.Fields) == 1 && query.Fields[0] == "*") {
-		if len(resDef.DefaultFields) > 0 {
-			return resDef.DefaultFields
+		return e.defaultOrAllFields(resDef)
+	}
+
+	// Detect shell glob expansion: if none of the fields match known fields,
+	// the shell likely expanded * to filenames. Fall back to defaults.
+	hasValidField := false
+	for _, f := range query.Fields {
+		if _, ok := resDef.Fields[f]; ok {
+			hasValidField = true
+			break
 		}
-		var fields []string
-		for name := range resDef.Fields {
-			fields = append(fields, name)
-		}
-		sort.Strings(fields)
-		return fields
+	}
+	if !hasValidField {
+		return e.defaultOrAllFields(resDef)
 	}
 
 	return query.Fields
+}
+
+func (e *Executor) defaultOrAllFields(resDef *registry.ResourceDefinition) []string {
+	if len(resDef.DefaultFields) > 0 {
+		return resDef.DefaultFields
+	}
+	var fields []string
+	for name := range resDef.Fields {
+		fields = append(fields, name)
+	}
+	sort.Strings(fields)
+	return fields
 }
 
 func (e *Executor) extractRow(item *unstructured.Unstructured, resDef *registry.ResourceDefinition, fields []string) map[string]interface{} {

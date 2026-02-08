@@ -15,6 +15,7 @@ type pluginDefinition struct {
 	Group         string                    `yaml:"group"`
 	Version       string                    `yaml:"version"`
 	Resource      string                    `yaml:"resource"`
+	Namespaced    *bool                     `yaml:"namespaced"` // default true
 	DefaultFields []string                  `yaml:"default_fields"`
 	Fields        map[string]pluginFieldDef `yaml:"fields"`
 }
@@ -72,6 +73,11 @@ func loadPlugin(path string) error {
 		}
 	}
 
+	namespaced := true
+	if plugin.Namespaced != nil {
+		namespaced = *plugin.Namespaced
+	}
+
 	def := &ResourceDefinition{
 		Name:    plugin.Name,
 		Aliases: plugin.Aliases,
@@ -80,6 +86,7 @@ func loadPlugin(path string) error {
 			Version:  plugin.Version,
 			Resource: plugin.Resource,
 		},
+		Namespaced:    namespaced,
 		DefaultFields: plugin.DefaultFields,
 		Fields:        fields,
 	}

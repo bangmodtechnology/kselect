@@ -11,6 +11,7 @@ func init() {
 			Version:  "v1",
 			Resource: "ingresses",
 		},
+		Namespaced:    true,
 		DefaultFields: []string{"name", "class", "host", "address", "age"},
 		Fields: map[string]FieldDefinition{
 			"name": {
