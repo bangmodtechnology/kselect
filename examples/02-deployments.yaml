@@ -27,11 +27,11 @@ spec:
             - containerPort: 80
           resources:
             requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
               cpu: 100m
               memory: 64Mi
-            limits:
-              cpu: 200m
-              memory: 128Mi
 ---
 # Backend API
 apiVersion: apps/v1
@@ -59,7 +59,7 @@ spec:
       containers:
         - name: api
           image: node:20-alpine
-          command: ["node", "server.js"]
+          command: ["node", "-e", "require('http').createServer((req,res)=>{res.end('ok')}).listen(8080)"]
           ports:
             - containerPort: 8080
           envFrom:
@@ -69,11 +69,11 @@ spec:
                 name: db-credentials
           resources:
             requests:
-              cpu: 250m
-              memory: 256Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: 200m
+              memory: 256Mi
 ---
 # Background worker
 apiVersion: apps/v1
@@ -101,17 +101,17 @@ spec:
       containers:
         - name: worker
           image: python:3.12-slim
-          command: ["python", "worker.py"]
+          command: ["python", "-c", "import time\nwhile True:\n    print('working...'); time.sleep(10)"]
           envFrom:
             - configMapRef:
                 name: app-config
           resources:
             requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
               cpu: 200m
               memory: 128Mi
-            limits:
-              cpu: 400m
-              memory: 256Mi
 ---
 # Redis cache
 apiVersion: apps/v1
@@ -142,11 +142,11 @@ spec:
             - containerPort: 6379
           resources:
             requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
               cpu: 100m
               memory: 128Mi
-            limits:
-              cpu: 200m
-              memory: 256Mi
           volumeMounts:
             - name: redis-config
               mountPath: /usr/local/etc/redis
@@ -197,8 +197,8 @@ spec:
               value: appdb
           resources:
             requests:
-              cpu: 250m
-              memory: 256Mi
+              cpu: 50m
+              memory: 128Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: 200m
+              memory: 256Mi

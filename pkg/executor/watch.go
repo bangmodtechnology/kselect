@@ -20,14 +20,14 @@ func (e *Executor) ExecuteWatch(query *parser.Query, interval time.Duration, for
 	defer ticker.Stop()
 
 	// Run immediately, then on interval
-	if err := e.runAndPrint(query, format); err != nil {
+	if err := e.runAndPrint(query, interval, format); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 	}
 
 	for {
 		select {
 		case <-ticker.C:
-			if err := e.runAndPrint(query, format); err != nil {
+			if err := e.runAndPrint(query, interval, format); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			}
 		case <-sigCh:
@@ -37,7 +37,7 @@ func (e *Executor) ExecuteWatch(query *parser.Query, interval time.Duration, for
 	}
 }
 
-func (e *Executor) runAndPrint(query *parser.Query, format output.Format) error {
+func (e *Executor) runAndPrint(query *parser.Query, interval time.Duration, format output.Format) error {
 	results, fields, err := e.Execute(query)
 	if err != nil {
 		return err
@@ -48,7 +48,7 @@ func (e *Executor) runAndPrint(query *parser.Query, format output.Format) error 
 
 	// Print header with timestamp
 	fmt.Printf("Every %s | %s | %s\n",
-		"2s",
+		interval,
 		time.Now().Format("2006-01-02 15:04:05"),
 		buildQuerySummary(query),
 	)

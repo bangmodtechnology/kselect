@@ -1,6 +1,6 @@
-# Standalone pods (ไม่ได้สร้างจาก Deployment) สำหรับทดสอบ query ที่หลากหลาย
+# Standalone pods for testing diverse query scenarios
 
-# Pod ปกติ
+# Normal running pod
 apiVersion: v1
 kind: Pod
 metadata:
@@ -16,11 +16,11 @@ spec:
       command: ["sleep", "3600"]
       resources:
         requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
           cpu: 50m
           memory: 32Mi
-        limits:
-          cpu: 100m
-          memory: 64Mi
 ---
 # Pod with multiple containers (sidecar pattern)
 apiVersion: v1
@@ -39,22 +39,23 @@ spec:
         - containerPort: 80
       resources:
         requests:
-          cpu: 100m
-          memory: 64Mi
-        limits:
-          cpu: 200m
-          memory: 128Mi
-    - name: log-collector
-      image: fluent/fluent-bit:latest
-      resources:
-        requests:
           cpu: 50m
           memory: 32Mi
         limits:
           cpu: 100m
           memory: 64Mi
+    - name: log-collector
+      image: busybox:latest
+      command: ["sh", "-c", "while true; do echo 'collecting logs'; sleep 30; done"]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 32Mi
 ---
-# Pod ที่จะ fail (image ไม่มี) - ทดสอบ status filter
+# Pod that will fail (nonexistent image) - for testing status filters
 apiVersion: v1
 kind: Pod
 metadata:
@@ -89,5 +90,5 @@ spec:
       command: ["echo", "job completed"]
       resources:
         requests:
-          cpu: 50m
-          memory: 32Mi
+          cpu: 10m
+          memory: 16Mi

@@ -1,19 +1,31 @@
 # kselect Examples
 
-ไฟล์ตัวอย่าง Kubernetes resources สำหรับทดสอบ kselect queries
+Example Kubernetes resources for testing kselect queries.
 
 ## Setup
 
 ```bash
-# สร้าง namespace สำหรับทดสอบ
-kubectl create namespace kselect-demo
-
-# Deploy ทุก resources
+# Deploy all resources (files are numbered for correct apply order)
 kubectl apply -f examples/
 
-# ลบทิ้งเมื่อเสร็จ
+# Clean up when done
 kubectl delete namespace kselect-demo
 ```
+
+## What Gets Created
+
+| Resource | Count | Notes |
+|----------|-------|-------|
+| Namespace | 1 | `kselect-demo` |
+| ConfigMaps | 3 | app-config, nginx-config, redis-config |
+| Secrets | 3 | db-credentials, api-keys, tls-secret |
+| ServiceAccounts | 2 | backend-sa, worker-sa |
+| Deployments | 5 | nginx(3), backend(2), worker(1), redis(1), postgres(1) |
+| Pods (standalone) | 4 | debug, sidecar, failing, batch-job |
+| Services | 5 | LB, ClusterIP, NodePort |
+| Ingresses | 2 | main-ingress, api-ingress |
+
+Total: ~12 pods (low resource requests, suitable for local clusters)
 
 ## Query Examples
 
