@@ -72,9 +72,9 @@ func Parse(input string) (*Query, error) {
 	fieldStr := strings.TrimSpace(input[:fromIdx])
 	rest := strings.TrimSpace(input[fromIdx+4:]) // skip "FROM"
 
-	// No fields specified → use default fields
+	// No fields specified → show all fields
 	if fieldStr == "" {
-		query.UseDefault = true
+		query.Fields = []string{"*"}
 	}
 
 	// Parse DISTINCT

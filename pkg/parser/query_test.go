@@ -161,13 +161,13 @@ func TestParseNoFrom(t *testing.T) {
 	}
 }
 
-func TestParseNoFieldsUseDefault(t *testing.T) {
+func TestParseNoFieldsSelectAll(t *testing.T) {
 	query, err := Parse("FROM pod WHERE namespace=default")
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
-	if !query.UseDefault {
-		t.Error("Expected UseDefault to be true")
+	if len(query.Fields) != 1 || query.Fields[0] != "*" {
+		t.Errorf("Expected fields ['*'], got %v", query.Fields)
 	}
 	if query.Resource != "pod" {
 		t.Errorf("Expected resource 'pod', got '%s'", query.Resource)
@@ -182,8 +182,8 @@ func TestParseNoFieldsNoWhere(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
-	if !query.UseDefault {
-		t.Error("Expected UseDefault to be true")
+	if len(query.Fields) != 1 || query.Fields[0] != "*" {
+		t.Errorf("Expected fields ['*'], got %v", query.Fields)
 	}
 	if query.Resource != "deployment" {
 		t.Errorf("Expected resource 'deployment', got '%s'", query.Resource)

@@ -140,22 +140,11 @@ func (e *Executor) fetchResources(resDef *registry.ResourceDefinition, query *pa
 }
 
 func (e *Executor) resolveFields(query *parser.Query, resDef *registry.ResourceDefinition) []string {
-	// Use default fields when user omits field list
-	if query.UseDefault && len(resDef.DefaultFields) > 0 {
-		return resDef.DefaultFields
-	}
-
-	if len(query.Fields) == 1 && query.Fields[0] == "*" {
-		var fields []string
-		for name := range resDef.Fields {
-			fields = append(fields, name)
+	// * or empty → use DefaultFields, fallback to all fields
+	if len(query.Fields) == 0 || (len(query.Fields) == 1 && query.Fields[0] == "*") {
+		if len(resDef.DefaultFields) > 0 {
+			return resDef.DefaultFields
 		}
-		sort.Strings(fields)
-		return fields
-	}
-
-	// Fallback: if fields is empty and no defaults, show all
-	if len(query.Fields) == 0 {
 		var fields []string
 		for name := range resDef.Fields {
 			fields = append(fields, name)
