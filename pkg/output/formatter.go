@@ -105,7 +105,12 @@ func (f *Formatter) printTable(results []map[string]interface{}, fields []string
 		values := make([]string, len(fields))
 		for i, field := range fields {
 			val := formatFieldValue(row[field], field)
-			values[i] = truncate(val, 50)
+			if colorEnabled {
+				val = colorize(val, field)
+				values[i] = truncateColored(val, 50)
+			} else {
+				values[i] = truncate(val, 50)
+			}
 		}
 		fmt.Fprintln(w, strings.Join(values, "\t"))
 	}
@@ -132,7 +137,11 @@ func (f *Formatter) printWide(results []map[string]interface{}, fields []string)
 	for _, row := range results {
 		values := make([]string, len(fields))
 		for i, field := range fields {
-			values[i] = formatFieldValue(row[field], field)
+			val := formatFieldValue(row[field], field)
+			if colorEnabled {
+				val = colorize(val, field)
+			}
+			values[i] = val
 		}
 		fmt.Fprintln(w, strings.Join(values, "\t"))
 	}

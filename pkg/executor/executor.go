@@ -84,6 +84,13 @@ func (e *Executor) Execute(query *parser.Query) ([]map[string]interface{}, []str
 	// Resolve fields (expand * to all fields)
 	fields := e.resolveFields(query, resDef)
 
+	// Resolve subqueries in WHERE conditions (execute once, cache results)
+	if query.Conditions != nil {
+		if err := e.resolveSubQueries(query.Conditions, query); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	// Extract field values and apply WHERE filter
 	var results []map[string]interface{}
 	for _, item := range items {
@@ -368,6 +375,52 @@ func applyDistinct(results []map[string]interface{}, fields []string) []map[stri
 	}
 
 	return unique
+}
+
+// resolveSubQueries walks all conditions and executes any subqueries,
+// storing the results in Condition.SubQueryValues for later evaluation.
+// Called once before the filter loop so subqueries are not re-executed per row.
+func (e *Executor) resolveSubQueries(group *parser.ConditionGroup, outerQuery *parser.Query) error {
+	for i := range group.Conditions {
+		cond := &group.Conditions[i]
+		if cond.SubQuery == nil {
+			continue
+		}
+
+		// Inherit namespace from outer query if not specified
+		if cond.SubQuery.Namespace == "" {
+			cond.SubQuery.Namespace = outerQuery.Namespace
+		}
+
+		// Execute subquery
+		results, fields, err := e.Execute(cond.SubQuery)
+		if err != nil {
+			return fmt.Errorf("subquery error: %w", err)
+		}
+
+		// Extract first field values
+		var values []string
+		fieldName := ""
+		if len(fields) > 0 {
+			fieldName = fields[0]
+		}
+		for _, row := range results {
+			if fieldName != "" {
+				if v, ok := row[fieldName]; ok {
+					values = append(values, fmt.Sprintf("%v", v))
+				}
+			}
+		}
+		cond.SubQueryValues = values
+	}
+
+	for _, sub := range group.SubGroups {
+		if err := e.resolveSubQueries(sub, outerQuery); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func FormatAge(timestamp interface{}) string {

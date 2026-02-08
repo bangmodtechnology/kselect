@@ -107,6 +107,85 @@ func TestPrintTableEmpty(t *testing.T) {
 	}
 }
 
+func TestColorizeStatus(t *testing.T) {
+	SetColorEnabled(true)
+	defer SetColorEnabled(false)
+
+	tests := []struct {
+		value, field string
+		wantColor    string
+	}{
+		{"Running", "status", colorGreen},
+		{"Succeeded", "status", colorGreen},
+		{"Pending", "status", colorYellow},
+		{"Failed", "status", colorRed},
+		{"CrashLoopBackOff", "status", colorRed},
+		{"Normal", "type", colorGreen},
+		{"Warning", "type", colorYellow},
+		{"pod-1", "name", ""},     // no color for name field
+		{"<none>", "status", ""},  // no color for <none>
+	}
+
+	for _, tt := range tests {
+		result := colorize(tt.value, tt.field)
+		if tt.wantColor == "" {
+			if strings.Contains(result, "\033[") {
+				t.Errorf("colorize(%q, %q) = %q, expected no ANSI codes", tt.value, tt.field, result)
+			}
+		} else {
+			if !strings.HasPrefix(result, tt.wantColor) {
+				t.Errorf("colorize(%q, %q) = %q, expected prefix %q", tt.value, tt.field, result, tt.wantColor)
+			}
+			if !strings.HasSuffix(result, colorReset) {
+				t.Errorf("colorize(%q, %q) should end with reset code", tt.value, tt.field)
+			}
+		}
+	}
+}
+
+func TestVisibleLen(t *testing.T) {
+	plain := "Running"
+	colored := colorGreen + "Running" + colorReset
+
+	if visibleLen(plain) != 7 {
+		t.Errorf("visibleLen(%q) = %d, want 7", plain, visibleLen(plain))
+	}
+	if visibleLen(colored) != 7 {
+		t.Errorf("visibleLen(%q) = %d, want 7", colored, visibleLen(colored))
+	}
+}
+
+func TestTruncateColored(t *testing.T) {
+	// Short string — no truncation
+	short := colorGreen + "Running" + colorReset
+	result := truncateColored(short, 50)
+	if visibleLen(result) != 7 {
+		t.Errorf("truncateColored short: visibleLen = %d, want 7", visibleLen(result))
+	}
+
+	// Long colored string — should truncate by visible chars
+	long := colorRed + "CrashLoopBackOff-very-long-status-text-here-extra" + colorReset
+	result = truncateColored(long, 20)
+	if visibleLen(result) != 20 {
+		t.Errorf("truncateColored long: visibleLen = %d, want 20", visibleLen(result))
+	}
+	if !strings.HasSuffix(result, colorReset) {
+		t.Error("truncateColored should end with reset code")
+	}
+}
+
+func TestColorDisabled(t *testing.T) {
+	SetColorEnabled(false)
+
+	result := colorize("Running", "status")
+	if strings.Contains(result, "\033[") {
+		t.Error("colorize should not add ANSI codes when disabled")
+	}
+	if result != "Running" {
+		t.Errorf("Expected 'Running', got %q", result)
+	}
+}
+
 func TestPrintTable(t *testing.T) {
 	var buf bytes.Buffer
 	f := &Formatter{format: FormatTable, writer: &buf}

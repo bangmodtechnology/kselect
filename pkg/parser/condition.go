@@ -30,9 +30,11 @@ const (
 )
 
 type Condition struct {
-	Field    string
-	Operator ConditionOperator
-	Value    string
+	Field          string
+	Operator       ConditionOperator
+	Value          string
+	SubQuery       *Query   // parsed subquery for IN/NOT IN
+	SubQueryValues []string // resolved values from executor (runtime)
 }
 
 type ConditionGroup struct {
@@ -130,6 +132,18 @@ func parseCondition(condStr string) (*Condition, error) {
 			cond.Value = strings.TrimSpace(condStr[idx+len(op):])
 			cond.Operator = ConditionOperator(strings.TrimSpace(opUpper))
 
+			// Check for subquery in IN/NOT IN: value contains FROM keyword
+			if (cond.Operator == OpIn || cond.Operator == OpNotIn) && isSubQuery(cond.Value) {
+				subSQL := strings.TrimSpace(cond.Value)
+				subSQL = strings.TrimPrefix(subSQL, "(")
+				subSQL = strings.TrimSuffix(subSQL, ")")
+				subQuery, err := Parse(subSQL)
+				if err != nil {
+					return nil, fmt.Errorf("invalid subquery: %w", err)
+				}
+				cond.SubQuery = subQuery
+			}
+
 			// Remove quotes
 			cond.Value = strings.Trim(cond.Value, "'\"")
 
@@ -190,6 +204,16 @@ func splitByLogicalOperator(clause string, operator string) []string {
 	return parts
 }
 
+// isSubQuery checks if an IN/NOT IN value looks like a subquery (contains FROM keyword).
+func isSubQuery(value string) bool {
+	v := strings.TrimSpace(value)
+	v = strings.TrimPrefix(v, "(")
+	v = strings.TrimSuffix(v, ")")
+	upper := strings.ToUpper(v)
+	// Must contain FROM keyword as a separate word
+	return strings.Contains(upper, " FROM ") || strings.HasPrefix(upper, "FROM ")
+}
+
 func (c *Condition) Evaluate(value interface{}) bool {
 	valStr := fmt.Sprintf("%v", value)
 
@@ -209,6 +233,14 @@ func (c *Condition) Evaluate(value interface{}) bool {
 		matched, _ := regexp.MatchString("(?i)^"+pattern+"$", valStr)
 		return !matched
 	case OpIn:
+		if c.SubQuery != nil {
+			for _, v := range c.SubQueryValues {
+				if v == valStr {
+					return true
+				}
+			}
+			return false
+		}
 		inValues := strings.Split(strings.Trim(c.Value, "()"), ",")
 		for _, v := range inValues {
 			if strings.TrimSpace(strings.Trim(v, "'\"")) == valStr {
@@ -217,6 +249,14 @@ func (c *Condition) Evaluate(value interface{}) bool {
 		}
 		return false
 	case OpNotIn:
+		if c.SubQuery != nil {
+			for _, v := range c.SubQueryValues {
+				if v == valStr {
+					return false
+				}
+			}
+			return true
+		}
 		inValues := strings.Split(strings.Trim(c.Value, "()"), ",")
 		for _, v := range inValues {
 			if strings.TrimSpace(strings.Trim(v, "'\"")) == valStr {

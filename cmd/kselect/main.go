@@ -29,6 +29,7 @@ func main() {
 	outputFormat := flag.String("o", "table", "Output format: table, json, yaml, csv, wide")
 	namespace := flag.String("n", "", "Namespace (like kubectl -n)")
 	allNamespaces := flag.Bool("A", false, "All namespaces (like kubectl -A)")
+	noColor := flag.Bool("no-color", false, "Disable color output")
 	showVersion := flag.Bool("version", false, "Show version")
 	listResources := flag.Bool("list", false, "List available resources and fields")
 	pluginDir := flag.String("plugins", "", "Directory containing plugin YAML files")
@@ -39,6 +40,11 @@ func main() {
 
 	// Include any remaining non-flag args from flag.Parse
 	queryArgs = append(queryArgs, flag.Args()...)
+
+	// Color: auto-detect TTY, respect --no-color flag
+	format := output.Format(*outputFormat)
+	useColor := !*noColor && output.DetectColor() && (format == output.FormatTable || format == output.FormatWide)
+	output.SetColorEnabled(useColor)
 
 	if *showVersion {
 		fmt.Printf("kselect version %s\n", Version)
@@ -87,8 +93,6 @@ func main() {
 		query.Namespace = exec.CurrentNamespace
 	}
 
-	format := output.Format(*outputFormat)
-
 	// Watch mode
 	if *watch {
 		if err := exec.ExecuteWatch(query, *interval, format); err != nil {
@@ -127,6 +131,7 @@ var knownBoolFlags = map[string]bool{
 	"-watch": true, "--watch": true,
 	"-version": true, "--version": true,
 	"-list": true, "--list": true,
+	"-no-color": true, "--no-color": true,
 }
 
 // splitArgs separates flag arguments from query arguments.
@@ -202,6 +207,7 @@ func printHelp() {
 	fmt.Println("  -plugins dir    Directory containing plugin YAML files")
 	fmt.Println("  -watch          Watch mode: continuously refresh results")
 	fmt.Println("  -interval dur   Watch refresh interval (default: 2s)")
+	fmt.Println("  -no-color       Disable color output (auto-detects TTY)")
 	fmt.Println("  -version        Show version")
 	fmt.Println()
 	fmt.Println("Examples:")

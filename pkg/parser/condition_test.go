@@ -247,6 +247,93 @@ func TestParseShellSafeWithAndOr(t *testing.T) {
 	}
 }
 
+func TestParseSubQuery(t *testing.T) {
+	group, err := ParseConditions("name IN (name FROM pod WHERE status=Running)")
+	if err != nil {
+		t.Fatalf("ParseConditions failed: %v", err)
+	}
+	if len(group.Conditions) != 1 {
+		t.Fatalf("Expected 1 condition, got %d", len(group.Conditions))
+	}
+	c := group.Conditions[0]
+	if c.Field != "name" {
+		t.Errorf("Expected field 'name', got '%s'", c.Field)
+	}
+	if c.Operator != OpIn {
+		t.Errorf("Expected operator IN, got '%s'", c.Operator)
+	}
+	if c.SubQuery == nil {
+		t.Fatal("Expected SubQuery to be set")
+	}
+	if c.SubQuery.Resource != "pod" {
+		t.Errorf("Expected subquery resource 'pod', got '%s'", c.SubQuery.Resource)
+	}
+	if len(c.SubQuery.Fields) != 1 || c.SubQuery.Fields[0] != "name" {
+		t.Errorf("Expected subquery fields [name], got %v", c.SubQuery.Fields)
+	}
+}
+
+func TestParseSubQueryNotIn(t *testing.T) {
+	group, err := ParseConditions("name NOT IN (name FROM deployment)")
+	if err != nil {
+		t.Fatalf("ParseConditions failed: %v", err)
+	}
+	c := group.Conditions[0]
+	if c.Operator != OpNotIn {
+		t.Errorf("Expected NOT IN, got '%s'", c.Operator)
+	}
+	if c.SubQuery == nil {
+		t.Fatal("Expected SubQuery to be set")
+	}
+	if c.SubQuery.Resource != "deployment" {
+		t.Errorf("Expected subquery resource 'deployment', got '%s'", c.SubQuery.Resource)
+	}
+}
+
+func TestParseStaticInStillWorks(t *testing.T) {
+	group, err := ParseConditions("status IN (Running,Pending)")
+	if err != nil {
+		t.Fatalf("ParseConditions failed: %v", err)
+	}
+	c := group.Conditions[0]
+	if c.SubQuery != nil {
+		t.Error("Expected SubQuery to be nil for static IN list")
+	}
+	if c.Operator != OpIn {
+		t.Errorf("Expected IN, got '%s'", c.Operator)
+	}
+}
+
+func TestSubQueryEvaluateWithValues(t *testing.T) {
+	cond := Condition{
+		Field:          "name",
+		Operator:       OpIn,
+		SubQuery:       &Query{Resource: "pod"}, // non-nil signals subquery
+		SubQueryValues: []string{"nginx", "redis", "postgres"},
+	}
+
+	if !cond.Evaluate("nginx") {
+		t.Error("Expected 'nginx' to be IN subquery values")
+	}
+	if cond.Evaluate("apache") {
+		t.Error("Expected 'apache' to NOT be IN subquery values")
+	}
+
+	// NOT IN
+	condNot := Condition{
+		Field:          "name",
+		Operator:       OpNotIn,
+		SubQuery:       &Query{Resource: "pod"},
+		SubQueryValues: []string{"nginx", "redis"},
+	}
+	if !condNot.Evaluate("apache") {
+		t.Error("Expected 'apache' to pass NOT IN")
+	}
+	if condNot.Evaluate("nginx") {
+		t.Error("Expected 'nginx' to fail NOT IN")
+	}
+}
+
 func TestParseEmptyCondition(t *testing.T) {
 	group, err := ParseConditions("")
 	if err != nil {
