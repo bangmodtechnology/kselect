@@ -125,6 +125,97 @@ func TestParseGroupBy(t *testing.T) {
 	}
 }
 
+func TestParseCountEmptyParens(t *testing.T) {
+	// COUNT() should be treated as COUNT(*) to avoid shell glob expansion
+	query, err := Parse("namespace, COUNT() as pod_count FROM pod GROUP BY namespace")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if len(query.Aggregates) != 1 {
+		t.Fatalf("Expected 1 aggregate, got %d", len(query.Aggregates))
+	}
+	if query.Aggregates[0].Function != "COUNT" {
+		t.Errorf("Expected COUNT function, got '%s'", query.Aggregates[0].Function)
+	}
+	if query.Aggregates[0].Field != "*" {
+		t.Errorf("Expected field '*' (normalized from empty), got '%s'", query.Aggregates[0].Field)
+	}
+	if query.Aggregates[0].Alias != "pod_count" {
+		t.Errorf("Expected alias 'pod_count', got '%s'", query.Aggregates[0].Alias)
+	}
+}
+
+func TestParseBareCountAsAlias(t *testing.T) {
+	// Shell-safe: COUNT as pod_count (no parens)
+	query, err := Parse("namespace, COUNT as pod_count FROM pod GROUP BY namespace")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if len(query.Aggregates) != 1 {
+		t.Fatalf("Expected 1 aggregate, got %d", len(query.Aggregates))
+	}
+	if query.Aggregates[0].Function != "COUNT" {
+		t.Errorf("Expected COUNT function, got '%s'", query.Aggregates[0].Function)
+	}
+	if query.Aggregates[0].Field != "*" {
+		t.Errorf("Expected field '*', got '%s'", query.Aggregates[0].Field)
+	}
+	if query.Aggregates[0].Alias != "pod_count" {
+		t.Errorf("Expected alias 'pod_count', got '%s'", query.Aggregates[0].Alias)
+	}
+}
+
+func TestParseDotNotationAggregate(t *testing.T) {
+	// Shell-safe: SUM.restarts as total (dot notation)
+	query, err := Parse("namespace, SUM.restarts as total FROM pod GROUP BY namespace")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if len(query.Aggregates) != 1 {
+		t.Fatalf("Expected 1 aggregate, got %d", len(query.Aggregates))
+	}
+	if query.Aggregates[0].Function != "SUM" {
+		t.Errorf("Expected SUM function, got '%s'", query.Aggregates[0].Function)
+	}
+	if query.Aggregates[0].Field != "restarts" {
+		t.Errorf("Expected field 'restarts', got '%s'", query.Aggregates[0].Field)
+	}
+	if query.Aggregates[0].Alias != "total" {
+		t.Errorf("Expected alias 'total', got '%s'", query.Aggregates[0].Alias)
+	}
+}
+
+func TestParseDotNotationCountStar(t *testing.T) {
+	// COUNT. (dot with no field) → COUNT(*)
+	query, err := Parse("namespace, COUNT. as total FROM pod GROUP BY namespace")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if len(query.Aggregates) != 1 {
+		t.Fatalf("Expected 1 aggregate, got %d", len(query.Aggregates))
+	}
+	if query.Aggregates[0].Field != "*" {
+		t.Errorf("Expected field '*', got '%s'", query.Aggregates[0].Field)
+	}
+}
+
+func TestParseMultipleShellSafeAggregates(t *testing.T) {
+	// Mix of shell-safe syntaxes
+	query, err := Parse("namespace, COUNT as total, SUM.restarts as restarts FROM pod GROUP BY namespace")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if len(query.Aggregates) != 2 {
+		t.Fatalf("Expected 2 aggregates, got %d", len(query.Aggregates))
+	}
+	if query.Aggregates[0].Function != "COUNT" || query.Aggregates[0].Alias != "total" {
+		t.Errorf("Expected COUNT as total, got %s as %s", query.Aggregates[0].Function, query.Aggregates[0].Alias)
+	}
+	if query.Aggregates[1].Function != "SUM" || query.Aggregates[1].Field != "restarts" {
+		t.Errorf("Expected SUM.restarts, got %s.%s", query.Aggregates[1].Function, query.Aggregates[1].Field)
+	}
+}
+
 func TestParseComplexQuery(t *testing.T) {
 	query, err := Parse("name,status FROM pod WHERE namespace=default AND status=Running ORDER BY name LIMIT 5")
 	if err != nil {
@@ -144,13 +235,13 @@ func TestParseComplexQuery(t *testing.T) {
 	}
 }
 
-func TestParseDefaultNamespace(t *testing.T) {
+func TestParseNoNamespace(t *testing.T) {
 	query, err := Parse("name FROM pod")
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
-	if query.Namespace != "default" {
-		t.Errorf("Expected default namespace 'default', got '%s'", query.Namespace)
+	if query.Namespace != "" {
+		t.Errorf("Expected empty namespace (resolved by executor), got '%s'", query.Namespace)
 	}
 }
 

@@ -93,11 +93,6 @@ func Parse(input string) (*Query, error) {
 		return nil, err
 	}
 
-	// Default namespace
-	if query.Namespace == "" {
-		query.Namespace = "default"
-	}
-
 	return query, nil
 }
 
@@ -114,21 +109,7 @@ func parseFieldsAndAggregates(query *Query, fieldStr string) error {
 			continue
 		}
 
-		// Check for aggregate function: COUNT(*), SUM(field), etc.
-		aggRe := regexp.MustCompile(`(?i)^(COUNT|SUM|AVG|MIN|MAX)\s*\(\s*([^)]*)\s*\)(?:\s+AS\s+(\w+))?$`)
-		if matches := aggRe.FindStringSubmatch(part); len(matches) > 0 {
-			agg := AggregateFunc{
-				Function: strings.ToUpper(matches[1]),
-				Field:    strings.TrimSpace(matches[2]),
-				Alias:    matches[3],
-			}
-			if agg.Alias == "" {
-				if agg.Field == "*" {
-					agg.Alias = strings.ToLower(agg.Function)
-				} else {
-					agg.Alias = strings.ToLower(agg.Function) + "_" + agg.Field
-				}
-			}
+		if agg, ok := parseAggregate(part); ok {
 			query.Aggregates = append(query.Aggregates, agg)
 		} else {
 			query.Fields = append(query.Fields, part)
@@ -136,6 +117,69 @@ func parseFieldsAndAggregates(query *Query, fieldStr string) error {
 	}
 
 	return nil
+}
+
+// parseAggregate tries to parse a field part as an aggregate function.
+// Supports three syntaxes (all shell-safe alternatives to avoid glob/paren issues):
+//
+//	COUNT(*), SUM(field)          — standard SQL (needs quoting in shell)
+//	COUNT(), SUM()                — empty parens normalized to * (needs quoting in zsh)
+//	COUNT as alias, SUM.field as alias — shell-safe: no parens needed
+func parseAggregate(part string) (AggregateFunc, bool) {
+	// 1. Standard SQL syntax: FUNC(field) [AS alias]
+	aggRe := regexp.MustCompile(`(?i)^(COUNT|SUM|AVG|MIN|MAX)\s*\(\s*([^)]*)\s*\)(?:\s+AS\s+(\w+))?$`)
+	if matches := aggRe.FindStringSubmatch(part); len(matches) > 0 {
+		field := strings.TrimSpace(matches[2])
+		if field == "" {
+			field = "*"
+		}
+		agg := AggregateFunc{
+			Function: strings.ToUpper(matches[1]),
+			Field:    field,
+			Alias:    matches[3],
+		}
+		setDefaultAlias(&agg)
+		return agg, true
+	}
+
+	// 2. Dot notation (shell-safe): FUNC.field [AS alias] or FUNC. [AS alias]
+	dotRe := regexp.MustCompile(`(?i)^(COUNT|SUM|AVG|MIN|MAX)\.(\S*)(?:\s+AS\s+(\w+))?$`)
+	if matches := dotRe.FindStringSubmatch(part); len(matches) > 0 {
+		field := strings.TrimSpace(matches[2])
+		if field == "" {
+			field = "*"
+		}
+		agg := AggregateFunc{
+			Function: strings.ToUpper(matches[1]),
+			Field:    field,
+			Alias:    matches[3],
+		}
+		setDefaultAlias(&agg)
+		return agg, true
+	}
+
+	// 3. Bare syntax (shell-safe): FUNC AS alias (no parens, means FUNC(*))
+	bareRe := regexp.MustCompile(`(?i)^(COUNT|SUM|AVG|MIN|MAX)\s+AS\s+(\w+)$`)
+	if matches := bareRe.FindStringSubmatch(part); len(matches) > 0 {
+		agg := AggregateFunc{
+			Function: strings.ToUpper(matches[1]),
+			Field:    "*",
+			Alias:    matches[2],
+		}
+		return agg, true
+	}
+
+	return AggregateFunc{}, false
+}
+
+func setDefaultAlias(agg *AggregateFunc) {
+	if agg.Alias == "" {
+		if agg.Field == "*" {
+			agg.Alias = strings.ToLower(agg.Function)
+		} else {
+			agg.Alias = strings.ToLower(agg.Function) + "_" + agg.Field
+		}
+	}
 }
 
 func parseFromAndClauses(query *Query, rest string) error {

@@ -20,8 +20,9 @@ import (
 )
 
 type Executor struct {
-	dynamicClient dynamic.Interface
-	registry      *registry.Registry
+	dynamicClient    dynamic.Interface
+	registry         *registry.Registry
+	CurrentNamespace string // namespace from current kube context
 }
 
 func NewExecutor() (*Executor, error) {
@@ -36,10 +37,28 @@ func NewExecutor() (*Executor, error) {
 		return nil, fmt.Errorf("failed to create dynamic client: %w", err)
 	}
 
+	// Get current context namespace from kubeconfig
+	currentNs := getCurrentContextNamespace(kubeconfig)
+
 	return &Executor{
-		dynamicClient: dynamicClient,
-		registry:      registry.GetGlobalRegistry(),
+		dynamicClient:    dynamicClient,
+		registry:         registry.GetGlobalRegistry(),
+		CurrentNamespace: currentNs,
 	}, nil
+}
+
+// getCurrentContextNamespace reads the namespace from the current kube context.
+// Returns "default" if not set.
+func getCurrentContextNamespace(kubeconfig string) string {
+	loadingRules := &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig}
+	configOverrides := &clientcmd.ConfigOverrides{}
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+
+	ns, _, err := kubeConfig.Namespace()
+	if err != nil || ns == "" {
+		return "default"
+	}
+	return ns
 }
 
 func (e *Executor) Execute(query *parser.Query) ([]map[string]interface{}, []string, error) {

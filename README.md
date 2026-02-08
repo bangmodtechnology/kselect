@@ -3,7 +3,7 @@
 SQL-like query tool for Kubernetes resources.
 
 ```bash
-kselect name,status,ip FROM pod WHERE namespace=default
+kselect name,status,ip FROM pod -n default
 ```
 
 ## Why kselect?
@@ -50,8 +50,14 @@ kselect automatically translates your query into Kubernetes API calls:
 # List supported resources and fields
 kselect -list
 
-# Your first query
-kselect name,status,ip FROM pod WHERE namespace=default
+# Your first query (uses current kube context namespace)
+kselect name,status,ip FROM pod
+
+# Specify namespace
+kselect name,status FROM pod -n production
+
+# All namespaces
+kselect name,namespace,status FROM pod -A
 
 # Export as JSON
 kselect name,status FROM pod -o json
@@ -92,12 +98,18 @@ kselect [flags] fields FROM resource [WHERE conditions] [ORDER BY field] [LIMIT 
 
 | Flag | Description | Default |
 |------|-------------|---------|
+| `-n` | Namespace (like `kubectl -n`) | current context |
+| `-A` | All namespaces (like `kubectl -A`) | |
 | `-o` | Output format: `table`, `json`, `yaml`, `csv`, `wide` | `table` |
 | `-list` | List available resources and fields | |
 | `-plugins` | Directory containing plugin YAML files | |
 | `-watch` | Watch mode: continuously refresh results | |
 | `-interval` | Watch refresh interval | `2s` |
 | `-version` | Show version | |
+
+### Namespace Resolution
+
+Priority: `-A` > `-n` flag > `WHERE namespace=` > current kube context namespace
 
 ## Query Examples
 
@@ -209,8 +221,20 @@ kselect name,status FROM pod LIMIT 10 OFFSET 20
 
 ### Aggregation
 
+Aggregate functions support **shell-safe syntax** — no parentheses needed:
+
+| SQL Syntax | Shell-Safe Syntax | Meaning |
+|------------|-------------------|---------|
+| `COUNT(*)` | `COUNT as alias` | Count all rows |
+| `COUNT(field)` | `COUNT.field as alias` | Count non-null values |
+| `SUM(field)` | `SUM.field as alias` | Sum values |
+| `AVG(field)` | `AVG.field as alias` | Average values |
+
+> **Why?** Shells interpret `*` and `()` as glob patterns and subshells.
+> Use the shell-safe syntax to avoid quoting issues.
+
 ```bash
-$ kselect namespace, COUNT(*) as pod_count FROM pod GROUP BY namespace ORDER BY pod_count DESC
+$ kselect namespace, COUNT as pod_count FROM pod -A GROUP BY namespace ORDER BY pod_count DESC
 ```
 ```
 NAMESPACE        POD_COUNT
@@ -223,7 +247,7 @@ monitoring       4
 ```
 
 ```bash
-$ kselect status, COUNT(*) as count FROM pod WHERE namespace=default GROUP BY status
+$ kselect status, COUNT as count FROM pod -n default GROUP BY status
 ```
 ```
 STATUS     COUNT
@@ -235,7 +259,7 @@ Failed     1
 ```
 
 ```bash
-$ kselect DISTINCT status FROM pod WHERE namespace=default
+$ kselect DISTINCT status FROM pod -n default
 ```
 ```
 STATUS
@@ -247,14 +271,14 @@ Failed
 ```
 
 ```bash
-# Average restarts
-kselect namespace, AVG(restarts) as avg_restarts FROM pod GROUP BY namespace
+# Average restarts (dot notation)
+kselect namespace, AVG.restarts as avg_restarts FROM pod GROUP BY namespace
 
 # Multiple aggregates
-kselect namespace, COUNT(*) as total, SUM(restarts) as restarts FROM pod GROUP BY namespace
+kselect namespace, COUNT as total, SUM.restarts as restarts FROM pod GROUP BY namespace
 
 # HAVING filter
-kselect namespace, COUNT(*) as count FROM pod GROUP BY namespace HAVING count > 10
+kselect namespace, COUNT as count FROM pod GROUP BY namespace HAVING count > 10
 ```
 
 ### JOIN
@@ -365,6 +389,26 @@ kselect * FROM pod WHERE namespace=default
 ```
 
 Aliases work in WHERE, ORDER BY, GROUP BY, and HAVING clauses.
+
+## Shell Quoting
+
+Shells like zsh and bash interpret `*` and `()` as special characters. kselect provides **shell-safe syntax** so you never need to quote:
+
+```bash
+# Problem: shell interprets * and () as glob/subshell
+kselect namespace, COUNT(*) as total FROM pod    # zsh: no matches found: COUNT(*)
+kselect namespace, COUNT() as total FROM pod     # zsh: interprets () as function def
+
+# Solution: use shell-safe syntax (no parens needed)
+kselect namespace, COUNT as total FROM pod -A GROUP BY namespace
+kselect namespace, SUM.restarts as total FROM pod GROUP BY namespace
+
+# Quoting also works if you prefer SQL syntax
+kselect namespace, 'COUNT(*)' as total FROM pod -A GROUP BY namespace
+
+# Note: bare * for fields works fine (kselect handles shell-expanded filenames gracefully)
+kselect * FROM pod
+```
 
 ## Real-World Use Cases
 

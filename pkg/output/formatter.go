@@ -92,7 +92,6 @@ func (f *Formatter) printTable(results []map[string]interface{}, fields []string
 	}
 
 	w := tabwriter.NewWriter(f.writer, 0, 0, 3, ' ', 0)
-	defer w.Flush()
 
 	// Header
 	headers := make([]string, len(fields))
@@ -111,6 +110,7 @@ func (f *Formatter) printTable(results []map[string]interface{}, fields []string
 		fmt.Fprintln(w, strings.Join(values, "\t"))
 	}
 
+	w.Flush()
 	fmt.Fprintf(f.writer, "\n%d resource(s) found.\n", len(results))
 	return nil
 }
@@ -122,7 +122,6 @@ func (f *Formatter) printWide(results []map[string]interface{}, fields []string)
 	}
 
 	w := tabwriter.NewWriter(f.writer, 0, 0, 2, ' ', 0)
-	defer w.Flush()
 
 	headers := make([]string, len(fields))
 	for i, f := range fields {
@@ -138,6 +137,7 @@ func (f *Formatter) printWide(results []map[string]interface{}, fields []string)
 		fmt.Fprintln(w, strings.Join(values, "\t"))
 	}
 
+	w.Flush()
 	fmt.Fprintf(f.writer, "\n%d resource(s) found.\n", len(results))
 	return nil
 }
