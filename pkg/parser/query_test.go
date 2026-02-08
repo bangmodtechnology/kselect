@@ -355,6 +355,51 @@ func TestParseSubQueryNotInWithKselectPrefix(t *testing.T) {
 	}
 }
 
+func TestParseFullQueryBareSubQuery(t *testing.T) {
+	// Full query with bare subquery (shell-safe, no parens)
+	query, err := Parse("name,status FROM pod WHERE name IN kselect name FROM deployment")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if query.Resource != "pod" {
+		t.Errorf("Expected resource 'pod', got '%s'", query.Resource)
+	}
+	if query.Conditions == nil {
+		t.Fatal("Expected conditions to be parsed")
+	}
+	c := query.Conditions.Conditions[0]
+	if c.SubQuery == nil {
+		t.Fatal("Expected SubQuery to be set")
+	}
+	if c.SubQuery.Resource != "deployment" {
+		t.Errorf("Expected subquery resource 'deployment', got '%s'", c.SubQuery.Resource)
+	}
+}
+
+func TestParseFullQueryBareSubQueryWithOrderBy(t *testing.T) {
+	// Bare subquery followed by ORDER BY on the outer query
+	query, err := Parse("name,status FROM pod WHERE name IN kselect name FROM deployment ORDER BY name")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if query.Resource != "pod" {
+		t.Errorf("Expected resource 'pod', got '%s'", query.Resource)
+	}
+	if query.Conditions == nil {
+		t.Fatal("Expected conditions")
+	}
+	c := query.Conditions.Conditions[0]
+	if c.SubQuery == nil {
+		t.Fatal("Expected SubQuery")
+	}
+	if c.SubQuery.Resource != "deployment" {
+		t.Errorf("Expected subquery resource 'deployment', got '%s'", c.SubQuery.Resource)
+	}
+	if len(query.OrderBy) != 1 || query.OrderBy[0].Field != "name" {
+		t.Errorf("Expected ORDER BY name, got %v", query.OrderBy)
+	}
+}
+
 func TestParseMultipleOrderBy(t *testing.T) {
 	query, err := Parse("namespace,name FROM pod ORDER BY namespace ASC, name DESC")
 	if err != nil {

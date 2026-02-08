@@ -334,6 +334,41 @@ func TestSubQueryEvaluateWithValues(t *testing.T) {
 	}
 }
 
+func TestParseSubQueryBareNoParens(t *testing.T) {
+	// Shell-safe: no parentheses needed for subquery
+	group, err := ParseConditions("name IN kselect name FROM pod WHERE status=Running")
+	if err != nil {
+		t.Fatalf("ParseConditions failed: %v", err)
+	}
+	c := group.Conditions[0]
+	if c.SubQuery == nil {
+		t.Fatal("Expected SubQuery to be set for bare subquery")
+	}
+	if c.SubQuery.Resource != "pod" {
+		t.Errorf("Expected subquery resource 'pod', got '%s'", c.SubQuery.Resource)
+	}
+	if len(c.SubQuery.Fields) != 1 || c.SubQuery.Fields[0] != "name" {
+		t.Errorf("Expected subquery fields [name], got %v", c.SubQuery.Fields)
+	}
+}
+
+func TestParseSubQueryBareNotIn(t *testing.T) {
+	group, err := ParseConditions("name NOT IN kselect name FROM deployment")
+	if err != nil {
+		t.Fatalf("ParseConditions failed: %v", err)
+	}
+	c := group.Conditions[0]
+	if c.Operator != OpNotIn {
+		t.Errorf("Expected NOT IN, got '%s'", c.Operator)
+	}
+	if c.SubQuery == nil {
+		t.Fatal("Expected SubQuery to be set")
+	}
+	if c.SubQuery.Resource != "deployment" {
+		t.Errorf("Expected subquery resource 'deployment', got '%s'", c.SubQuery.Resource)
+	}
+}
+
 func TestParseEmptyCondition(t *testing.T) {
 	group, err := ParseConditions("")
 	if err != nil {
