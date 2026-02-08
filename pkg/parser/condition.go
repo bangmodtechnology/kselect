@@ -84,9 +84,35 @@ func parseAndGroup(clause string) (*ConditionGroup, error) {
 	return group, nil
 }
 
+// shellSafeOps maps shell-safe text operators to their canonical form.
+// These avoid shell metacharacter conflicts (>, <, >=, <=).
+var shellSafeOps = map[string]ConditionOperator{
+	"GT": OpGreaterThan,
+	"GE": OpGreaterEqual,
+	"LT": OpLessThan,
+	"LE": OpLessEqual,
+	"NE": OpNotEqual,
+	"EQ": OpEqual,
+}
+
 func parseCondition(condStr string) (*Condition, error) {
 	cond := &Condition{}
 
+	// 1. Try shell-safe text operators first (GT, GE, LT, LE, NE, EQ)
+	//    These are space-delimited: "field GT value"
+	for textOp, canonicalOp := range shellSafeOps {
+		pattern := ` ` + textOp + ` `
+		idx := strings.Index(strings.ToUpper(condStr), strings.ToUpper(pattern))
+		if idx != -1 {
+			cond.Field = strings.TrimSpace(condStr[:idx])
+			cond.Value = strings.TrimSpace(condStr[idx+len(pattern):])
+			cond.Operator = canonicalOp
+			cond.Value = strings.Trim(cond.Value, "'\"")
+			return cond, nil
+		}
+	}
+
+	// 2. Standard operators
 	operators := []string{
 		" NOT LIKE ", " LIKE ",
 		" NOT IN ", " IN ",

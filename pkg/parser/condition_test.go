@@ -192,6 +192,61 @@ func TestEvaluateGroupOr(t *testing.T) {
 	}
 }
 
+func TestParseShellSafeOperators(t *testing.T) {
+	tests := []struct {
+		input    string
+		field    string
+		operator ConditionOperator
+		value    string
+	}{
+		{"restarts GT 10", "restarts", OpGreaterThan, "10"},
+		{"restarts LT 5", "restarts", OpLessThan, "5"},
+		{"restarts GE 10", "restarts", OpGreaterEqual, "10"},
+		{"restarts LE 5", "restarts", OpLessEqual, "5"},
+		{"status NE Running", "status", OpNotEqual, "Running"},
+		{"namespace EQ default", "namespace", OpEqual, "default"},
+		// case-insensitive
+		{"restarts gt 10", "restarts", OpGreaterThan, "10"},
+		{"restarts Gt 10", "restarts", OpGreaterThan, "10"},
+	}
+
+	for _, tt := range tests {
+		group, err := ParseConditions(tt.input)
+		if err != nil {
+			t.Fatalf("ParseConditions failed for '%s': %v", tt.input, err)
+		}
+		if len(group.Conditions) != 1 {
+			t.Fatalf("For '%s': expected 1 condition, got %d", tt.input, len(group.Conditions))
+		}
+		c := group.Conditions[0]
+		if c.Field != tt.field {
+			t.Errorf("For '%s': expected field '%s', got '%s'", tt.input, tt.field, c.Field)
+		}
+		if c.Operator != tt.operator {
+			t.Errorf("For '%s': expected operator '%s', got '%s'", tt.input, tt.operator, c.Operator)
+		}
+		if c.Value != tt.value {
+			t.Errorf("For '%s': expected value '%s', got '%s'", tt.input, tt.value, c.Value)
+		}
+	}
+}
+
+func TestParseShellSafeWithAndOr(t *testing.T) {
+	group, err := ParseConditions("restarts GT 10 AND status NE Failed")
+	if err != nil {
+		t.Fatalf("ParseConditions failed: %v", err)
+	}
+	if len(group.Conditions) != 2 {
+		t.Fatalf("Expected 2 conditions, got %d", len(group.Conditions))
+	}
+	if group.Conditions[0].Operator != OpGreaterThan {
+		t.Errorf("Expected GT operator, got '%s'", group.Conditions[0].Operator)
+	}
+	if group.Conditions[1].Operator != OpNotEqual {
+		t.Errorf("Expected NE operator, got '%s'", group.Conditions[1].Operator)
+	}
+}
+
 func TestParseEmptyCondition(t *testing.T) {
 	group, err := ParseConditions("")
 	if err != nil {
