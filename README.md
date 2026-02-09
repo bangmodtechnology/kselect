@@ -360,8 +360,12 @@ kselect name,ready FROM deployment --watch --interval 5s
 
 | Resource | Aliases | Default Fields | All Fields |
 |----------|---------|----------------|------------|
-| pod | pods, po | name, status, ip, node, restarts, age | + namespace, image, cpu.req, cpu.limit, mem.req, mem.limit, labels |
-| deployment | deployments, deploy | name, replicas, ready, available, age | + namespace, updated, image, strategy, labels |
+| pod | pods, po | name, status, ip, node, restarts, age | + namespace, image, cpu.req, cpu.limit, mem.req, mem.limit, cpu.req-m, cpu.limit-m, mem.req-mi, mem.limit-mi, labels |
+| deployment | deployments, deploy | name, replicas, ready, available, age | + namespace, updated, image, strategy, cpu.req, cpu.limit, mem.req, mem.limit, cpu.req-m, cpu.limit-m, mem.req-mi, mem.limit-mi, labels |
+| daemonset | daemonsets, ds | name, desired, current, ready, available, age | + namespace, updated, misscheduled, image, selector, cpu.req, cpu.limit, mem.req, mem.limit, cpu.req-m, cpu.limit-m, mem.req-mi, mem.limit-mi, labels |
+| statefulset | statefulsets, sts | name, replicas, ready, age | + namespace, current, updated, image, servicename, cpu.req, cpu.limit, mem.req, mem.limit, cpu.req-m, cpu.limit-m, mem.req-mi, mem.limit-mi, labels |
+| job | jobs | name, completions, succeeded, failed, age | + namespace, active, parallelism, backofflimit, image, cpu.req, cpu.limit, mem.req, mem.limit, cpu.req-m, cpu.limit-m, mem.req-mi, mem.limit-mi, labels |
+| cronjob | cronjobs, cj | name, schedule, suspend, active, last-schedule, age | + namespace, last-success, concurrency, image, cpu.req, cpu.limit, mem.req, mem.limit, cpu.req-m, cpu.limit-m, mem.req-mi, mem.limit-mi, labels |
 | service | services, svc | name, type, cluster-ip, port, age | + namespace, external-ip, targetport, selector |
 | ingress | ingresses, ing | name, class, host, address, age | + namespace |
 | configmap | configmaps, cm | name, data-keys, age | + namespace |
@@ -369,6 +373,32 @@ kselect name,ready FROM deployment --watch --interval 5s
 | serviceaccount | serviceaccounts, sa | name, secrets, age | + namespace |
 | node | nodes, no | name, status, roles, version, internal-ip, age | + external-ip, os, kernel, container-runtime, cpu, memory, pods, arch, labels |
 | gateway | gateways, gw | name, class, addresses, programmed, age | + namespace, listeners, labels |
+| networkpolicy | netpol | name, pod-selector, policy-types, age | + namespace, ingress-rules, egress-rules, labels |
+| poddisruptionbudget | pdb, pdbs | name, min-available, max-unavailable, current-healthy, age | + namespace, desired-healthy, disruptions-allowed, expected-pods, labels |
+| resourcequota | quota, quotas | name, hard, used, age | + namespace, scopes, labels |
+| role | roles | name, rules, age | + namespace, labels |
+| rolebinding | rolebindings | name, role-ref, subjects, age | + namespace, labels |
+| clusterrole | clusterroles | name, rules, age | + aggregation-rule, labels |
+| clusterrolebinding | clusterrolebindings | name, role-ref, subjects, age | + labels |
+
+### Normalized Fields for Aggregation
+
+Workload resources (pod, deployment, daemonset, statefulset, job, cronjob) support normalized numeric fields for accurate `SUM` and `AVG` aggregations:
+
+| Field | Unit | Description |
+|-------|------|-------------|
+| `cpu.req-m` | millicores | CPU requests normalized to millicores |
+| `cpu.limit-m` | millicores | CPU limits normalized to millicores |
+| `mem.req-mi` | MiB | Memory requests normalized to MiB |
+| `mem.limit-mi` | MiB | Memory limits normalized to MiB |
+
+```bash
+# Example: Total CPU limits by namespace
+kselect ns, SUM.cpu.limit-m as total_cpu FROM pod GROUP BY ns -A
+
+# Example: Average memory requests across deployments
+kselect ns, AVG.mem.req-mi as avg_mem FROM deployment GROUP BY ns -A
+```
 
 `*` or omitting fields will display the Default Fields for that resource.
 
