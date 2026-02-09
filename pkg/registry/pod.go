@@ -69,6 +69,30 @@ func init() {
 				Description: "Memory limits",
 				Type:        "string",
 			},
+			"cpu.req-m": {
+				Name:        "cpu.req-m",
+				JSONPath:    "{.spec.containers[*].resources.requests.cpu}",
+				Description: "CPU requests in millicores",
+				Type:        "int",
+			},
+			"cpu.limit-m": {
+				Name:        "cpu.limit-m",
+				JSONPath:    "{.spec.containers[*].resources.limits.cpu}",
+				Description: "CPU limits in millicores",
+				Type:        "int",
+			},
+			"mem.req-mi": {
+				Name:        "mem.req-mi",
+				JSONPath:    "{.spec.containers[*].resources.requests.memory}",
+				Description: "Memory requests in MiB",
+				Type:        "int",
+			},
+			"mem.limit-mi": {
+				Name:        "mem.limit-mi",
+				JSONPath:    "{.spec.containers[*].resources.limits.memory}",
+				Description: "Memory limits in MiB",
+				Type:        "int",
+			},
 			"image": {
 				Name:        "image",
 				JSONPath:    "{.spec.containers[*].image}",

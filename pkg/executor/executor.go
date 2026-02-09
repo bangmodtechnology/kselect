@@ -206,7 +206,26 @@ func (e *Executor) extractRow(item *unstructured.Unstructured, resDef *registry.
 	row := make(map[string]interface{})
 	// Extract all known fields so WHERE conditions can reference any field
 	for fieldName, fieldDef := range resDef.Fields {
-		row[fieldName] = e.extractField(item, fieldDef.JSONPath)
+		value := e.extractField(item, fieldDef.JSONPath)
+
+		// Parse quantity strings for normalized fields
+		if strings.HasSuffix(fieldName, "-m") {
+			// CPU field in millicores
+			if strVal, ok := value.(string); ok {
+				if parsed, err := parser.ParseCPUToMillicores(strVal); err == nil {
+					value = parsed
+				}
+			}
+		} else if strings.HasSuffix(fieldName, "-mi") {
+			// Memory field in MiB
+			if strVal, ok := value.(string); ok {
+				if parsed, err := parser.ParseMemoryToMiB(strVal); err == nil {
+					value = parsed
+				}
+			}
+		}
+
+		row[fieldName] = value
 	}
 	return row
 }
