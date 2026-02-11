@@ -27,6 +27,64 @@ kselect name,restarts FROM pod WHERE namespace=production AND restarts > 5 ORDER
 - JOIN across resource types (e.g. pod with service)
 - Extend with new resources via YAML plugins without modifying code
 
+## ✨ Features
+
+### 🔍 **Query Validation**
+Validate queries before execution with smart suggestions for typos:
+
+```bash
+kselect --dry-run nam FROM pod
+# Error: Field 'nam' not found in resource 'pod'
+# Did you mean: name?
+
+kselect --dry-run name FROM pode
+# Error: Resource 'pode' not found
+# Did you mean: pod, node, or pods?
+```
+
+### 💬 **Interactive REPL Mode**
+Query interactively without repeating `kselect`:
+
+```bash
+kselect --interactive
+kselect> name,status FROM pod WHERE ns=default
+kselect> DESCRIBE pod
+kselect> namespace,COUNT as total FROM pod GROUP BY namespace
+kselect> \exit
+```
+
+### 📋 **Resource Discovery**
+Explore available resources and their fields:
+
+```bash
+# Describe a resource schema
+kselect --describe pod
+kselect DESCRIBE deployment
+
+# List all available resources
+kselect --list
+```
+
+### 🎨 **Rich Output**
+- **Color-coded status fields** (Running=green, Pending=yellow, Failed=red)
+- **Multiple formats:** table, json, yaml, csv, wide
+- **Auto-detects TTY** for appropriate output
+- **Watch mode** for real-time monitoring
+
+### 🚀 **Advanced SQL Features**
+- **Subqueries:** `WHERE name IN kselect name FROM deployment`
+- **JOINs:** INNER, LEFT, RIGHT JOIN across resources
+- **Aggregations:** COUNT, SUM, AVG, MIN, MAX with GROUP BY
+- **HAVING clause:** Filter aggregated results
+- **DISTINCT:** Remove duplicate rows
+- **Field aliases:** Use `ns` for `namespace`, etc.
+
+### 🧪 **Production Ready**
+- 78%+ test coverage
+- 66 integration test cases
+- Comprehensive query validation
+- Fuzzy matching for error suggestions
+
 ## How It Works
 
 ```
@@ -48,7 +106,10 @@ kselect automatically translates your query into Kubernetes API calls:
 
 ```bash
 # List supported resources and fields
-kselect -list
+kselect --list
+
+# Describe a resource to see available fields
+kselect --describe pod
 
 # Your first query (uses current kube context namespace)
 kselect name,status,ip FROM pod
@@ -58,6 +119,12 @@ kselect name,status FROM pod -n production
 
 # All namespaces
 kselect name,namespace,status FROM pod -A
+
+# Validate query before running
+kselect --dry-run name,status FROM pod WHERE ns=default
+
+# Interactive mode (REPL)
+kselect --interactive
 
 # Export as JSON
 kselect name,status FROM pod -o json
@@ -156,11 +223,15 @@ kselect [flags] fields FROM resource [WHERE conditions] [ORDER BY field] [LIMIT 
 | `-n` | Namespace (like `kubectl -n`) | current context |
 | `-A` | All namespaces (like `kubectl -A`) | |
 | `-o` | Output format: `table`, `json`, `yaml`, `csv`, `wide` | `table` |
-| `-list` | List available resources and fields | |
-| `-plugins` | Directory containing plugin YAML files | |
-| `-watch` | Watch mode: continuously refresh results | |
-| `-interval` | Watch refresh interval | `2s` |
-| `-version` | Show version | |
+| `--interactive` | Interactive REPL mode | |
+| `--dry-run` | Validate query without executing | |
+| `--describe` | Describe resource schema (e.g., `--describe pod`) | |
+| `--list` | List available resources and fields | |
+| `--plugins` | Directory containing plugin YAML files | |
+| `--watch` | Watch mode: continuously refresh results | |
+| `--interval` | Watch refresh interval | `2s` |
+| `--no-color` | Disable color output | auto-detect TTY |
+| `--version` | Show version | |
 
 ### Namespace Resolution
 
@@ -411,6 +482,96 @@ kselect name,status,restarts FROM pod WHERE namespace=default --watch
 kselect name,ready FROM deployment --watch --interval 5s
 ```
 
+### Interactive Mode (REPL)
+
+```bash
+$ kselect --interactive
+kselect> name,status FROM pod WHERE ns=default LIMIT 3
+NAME                                STATUS
+nginx-frontend-7c9b5d8f4-abc12     Running
+backend-api-5d4f8b7c9-ghi56        Running
+redis-6f7b8c9d0-jkl78              Running
+
+3 resource(s) found.
+
+kselect> DESCRIBE pod
+Resource: pod (aliases: pods, po)
+Scope: Namespaced
+
+Default Fields: name, status, ip, node, restarts, age
+
+All Fields:
+  name         - Pod name [string]
+  namespace    - Namespace (alias: ns) [string]
+  status       - Pod phase [string]
+  ip           - Pod IP [string]
+  ...
+
+kselect> namespace, COUNT as total FROM pod GROUP BY namespace
+NAMESPACE      TOTAL
+default        12
+kube-system    8
+
+kselect> \exit
+Goodbye!
+```
+
+### Query Validation
+
+```bash
+# Validate query before execution
+$ kselect --dry-run name,invalid FROM pod
+Validation error: Field 'invalid' not found in resource 'pod'
+
+# Typo detection with suggestions
+$ kselect --dry-run nam FROM pod
+Validation error: Field 'nam' not found in resource 'pod'
+Did you mean: name?
+
+$ kselect --dry-run name FROM pode
+Validation error: Resource 'pode' not found
+Did you mean: pod, node, or pods?
+
+# Check query is valid
+$ kselect --dry-run name,status FROM pod WHERE ns=default
+Query validation passed ✓
+Resource: pod
+Fields: name, status
+```
+
+### Resource Discovery
+
+```bash
+# List all available resources
+$ kselect --list
+Available Resources:
+
+  pod (pods, po)
+  Default: name, status, ip, node, restarts, age
+  Fields:
+    - name          Pod name [string]
+    - namespace     Namespace (alias: ns) [string]
+    - status        Pod phase [string]
+    ...
+
+# Describe specific resource
+$ kselect --describe deployment
+Resource: deployment (aliases: deployments, deploy)
+Scope: Namespaced
+
+Default Fields: name, replicas, ready, available, age
+
+All Fields:
+  name         - Deployment name [string]
+  namespace    - Namespace (alias: ns) [string]
+  replicas     - Desired replicas [number]
+  ready        - Ready replicas [number]
+  ...
+
+# Alternative syntax
+$ kselect DESCRIBE service
+```
+
 ## Available Resources
 
 | Resource | Aliases | Default Fields | All Fields |
@@ -650,11 +811,83 @@ kselect --plugins=./plugins name,ready,issuer FROM certificate WHERE namespace=d
 
 ```bash
 make build      # Build binary
-make test       # Run tests
+make test       # Run tests (all packages)
 make deps       # go mod tidy
 make clean      # Clean build artifacts
-make release    # Cross-compile for linux/darwin/windows
+make install    # Build and install to /usr/local/bin
 ```
+
+### Testing
+
+kselect has comprehensive test coverage:
+
+```bash
+# Run all tests
+make test
+
+# Run specific package tests
+go test -v ./pkg/parser/
+go test -v ./pkg/validator/
+go test -v ./test/
+
+# Run with coverage
+go test -cover ./...
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+```
+
+**Test Coverage:**
+- Parser: 79.5% coverage
+- Validator: 78.1% coverage
+- Integration: 66 test cases
+- Edge cases & complex scenarios
+
+### Project Structure
+
+```
+kselect/
+├── cmd/kselect/          # Main CLI entry point
+├── pkg/
+│   ├── parser/           # SQL-like query parser
+│   ├── validator/        # Query validation with fuzzy matching
+│   ├── registry/         # Resource definitions
+│   ├── executor/         # K8s API interaction
+│   ├── output/           # Output formatters
+│   ├── completion/       # Shell completion
+│   ├── describe/         # DESCRIBE command
+│   └── repl/             # Interactive REPL
+└── test/                 # Integration tests
+```
+
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+
+- Adding new resources
+- Adding new output formats
+- Creating YAML plugins
+- Running tests
+- Submitting pull requests
+
+Quick contribution examples:
+
+```bash
+# Add a new built-in resource
+# 1. Create pkg/registry/myresource.go
+# 2. Register with init() function
+# 3. Add tests
+
+# Add a YAML plugin (no code needed!)
+# 1. Create plugins/myresource.yaml
+# 2. Define fields with JSONPath
+# 3. Use with --plugins flag
+```
+
+## Community
+
+- **Issues:** [GitHub Issues](https://github.com/bangmodtechnology/kselect/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/bangmodtechnology/kselect/discussions)
+- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License
 
