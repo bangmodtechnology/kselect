@@ -1,0 +1,28 @@
+feat: prepare v1.0.0 release with query validation and comprehensive testing
+
+Major Features:
+- Add query validator with fuzzy matching suggestions (78% test coverage)
+- Add comprehensive integration test suite (66 test cases)
+- Add REPL interactive mode
+- Add DESCRIBE command for resource schema discovery
+
+Documentation:
+- Add CONTRIBUTING.md with detailed contribution guidelines
+- Update README.md with multiple installation methods
+- Add shell completion generation script
+
+Testing:
+- Integration tests covering parser + validator + formatter
+- Edge case testing (14 test cases)
+- Complex query scenarios (13 test cases)
+- Validation error quality tests (5 test cases)
+- Fuzzy matching suggestions tests (3 test cases)
+
+Quality:
+- Test coverage: 78% validator, 79% parser
+- All 66 integration tests passing
+- Query validation prevents common errors
+- Smart suggestions for typos
+
+Breaking Changes:
+- None (backwards compatible)

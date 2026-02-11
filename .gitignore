@@ -56,5 +56,15 @@ CLAUDE.md
 .cursor/
 .github/copilot-instructions.md
 
-# Release
+# Release & Planning (private/internal)
 release.md
+ROADMAP.md
+RELEASE_CHECKLIST.md
+HOMEBREW_SETUP.md
+RELEASE_v*.md
+
+# Homebrew (managed in separate homebrew-tap repo)
+Formula/
+
+# Generated completions (regenerated during build)
+completions/

@@ -8,10 +8,13 @@ import (
 	"time"
 
 	"github.com/bangmodtechnology/kselect/pkg/completion"
+	"github.com/bangmodtechnology/kselect/pkg/describe"
 	"github.com/bangmodtechnology/kselect/pkg/executor"
 	"github.com/bangmodtechnology/kselect/pkg/output"
 	"github.com/bangmodtechnology/kselect/pkg/parser"
 	"github.com/bangmodtechnology/kselect/pkg/registry"
+	"github.com/bangmodtechnology/kselect/pkg/repl"
+	"github.com/bangmodtechnology/kselect/pkg/validator"
 
 	// Import resource definitions (auto-register via init())
 	_ "github.com/bangmodtechnology/kselect/pkg/registry"
@@ -36,6 +39,9 @@ func main() {
 	pluginDir := flag.String("plugins", "", "Directory containing plugin YAML files")
 	watch := flag.Bool("watch", false, "Watch mode: continuously refresh results")
 	interval := flag.Duration("interval", 2*time.Second, "Watch refresh interval")
+	interactive := flag.Bool("interactive", false, "Interactive REPL mode")
+	dryRun := flag.Bool("dry-run", false, "Validate query without executing")
+	describeResource := flag.String("describe", "", "Describe a resource schema")
 
 	flag.Parse()
 
@@ -64,6 +70,41 @@ func main() {
 		return
 	}
 
+	// Describe resource
+	if *describeResource != "" {
+		reg := registry.GetGlobalRegistry()
+		if err := describe.Resource(reg, *describeResource); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Interactive mode
+	if *interactive {
+		exec, err := executor.NewExecutor()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error connecting to Kubernetes: %v\n", err)
+			os.Exit(1)
+		}
+
+		config := repl.Config{
+			OutputFormat:  *outputFormat,
+			Namespace:     *namespace,
+			AllNamespaces: *allNamespaces,
+			UseColor:      useColor,
+		}
+
+		r, err := repl.New(exec, config)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error initializing REPL: %v\n", err)
+			os.Exit(1)
+		}
+
+		r.Start()
+		return
+	}
+
 	// Subcommand: completion
 	if len(queryArgs) > 0 && queryArgs[0] == "completion" {
 		if len(queryArgs) < 2 {
@@ -87,6 +128,17 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Check for DESCRIBE command
+	if len(queryArgs) >= 2 && strings.ToUpper(queryArgs[0]) == "DESCRIBE" {
+		reg := registry.GetGlobalRegistry()
+		resourceName := queryArgs[1]
+		if err := describe.Resource(reg, resourceName); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	queryStr := strings.Join(queryArgs, " ")
 
 	// Parse query
@@ -94,6 +146,27 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing query: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Dry-run mode: validate query without execution
+	if *dryRun {
+		reg := registry.GetGlobalRegistry()
+		v := validator.New(reg)
+		if err := v.Validate(query); err != nil {
+			fmt.Fprintf(os.Stderr, "Validation error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Query validation passed ✓")
+		fmt.Printf("Resource: %s\n", query.Resource)
+		if len(query.Fields) > 0 && query.Fields[0] != "*" {
+			fmt.Printf("Fields: %s\n", strings.Join(query.Fields, ", "))
+		} else {
+			resource, _ := reg.Get(query.Resource)
+			if len(resource.DefaultFields) > 0 {
+				fmt.Printf("Fields: %s (default)\n", strings.Join(resource.DefaultFields, ", "))
+			}
+		}
+		return
 	}
 
 	// Create executor
@@ -142,6 +215,7 @@ var knownValueFlags = map[string]bool{
 	"-n": true, "--n": true,
 	"-plugins": true, "--plugins": true,
 	"-interval": true, "--interval": true,
+	"-describe": true, "--describe": true,
 }
 
 // knownBoolFlags lists boolean flags (no value).
@@ -151,6 +225,8 @@ var knownBoolFlags = map[string]bool{
 	"-version": true, "--version": true,
 	"-list": true, "--list": true,
 	"-no-color": true, "--no-color": true,
+	"-interactive": true, "--interactive": true,
+	"-dry-run": true, "--dry-run": true,
 }
 
 // splitArgs separates flag arguments from query arguments.
@@ -222,6 +298,9 @@ func printHelp() {
 	fmt.Println("  -n namespace    Namespace (like kubectl -n, default: current context)")
 	fmt.Println("  -A              All namespaces (like kubectl -A)")
 	fmt.Println("  -o string       Output format: table, json, yaml, csv, wide (default: table)")
+	fmt.Println("  -interactive    Interactive REPL mode")
+	fmt.Println("  -dry-run        Validate query without executing")
+	fmt.Println("  -describe res   Describe resource schema (e.g., -describe pod)")
 	fmt.Println("  -list           List available resources and fields")
 	fmt.Println("  -plugins dir    Directory containing plugin YAML files")
 	fmt.Println("  -watch          Watch mode: continuously refresh results")
@@ -275,4 +354,8 @@ func printHelp() {
 	fmt.Println("  # Shell completion")
 	fmt.Println("  source <(kselect completion bash)   # bash")
 	fmt.Println("  source <(kselect completion zsh)    # zsh")
+	fmt.Println()
+	fmt.Println("  # Describe resource")
+	fmt.Println("  kselect --describe pod")
+	fmt.Println("  kselect DESCRIBE deployment")
 }

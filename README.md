@@ -68,6 +68,47 @@ kselect name,status,restarts FROM pod --watch
 
 ## Installation
 
+### Homebrew (macOS and Linux)
+
+```bash
+# Add tap
+brew tap bangmodtech/tap
+
+# Install
+brew install kselect
+
+# Verify installation
+kselect --version
+```
+
+### Install Script (One-liner)
+
+```bash
+curl -sSL https://raw.githubusercontent.com/bangmodtechnology/kselect/master/install.sh | sh
+```
+
+### Download Binary
+
+Download pre-built binaries from [GitHub Releases](https://github.com/bangmodtechnology/kselect/releases/latest):
+
+```bash
+# macOS (Apple Silicon)
+curl -L https://github.com/bangmodtechnology/kselect/releases/latest/download/kselect-darwin-arm64.tar.gz | tar xz
+sudo mv kselect /usr/local/bin/
+
+# macOS (Intel)
+curl -L https://github.com/bangmodtechnology/kselect/releases/latest/download/kselect-darwin-amd64.tar.gz | tar xz
+sudo mv kselect /usr/local/bin/
+
+# Linux (x86_64)
+curl -L https://github.com/bangmodtechnology/kselect/releases/latest/download/kselect-linux-amd64.tar.gz | tar xz
+sudo mv kselect /usr/local/bin/
+
+# Linux (ARM64)
+curl -L https://github.com/bangmodtechnology/kselect/releases/latest/download/kselect-linux-arm64.tar.gz | tar xz
+sudo mv kselect /usr/local/bin/
+```
+
 ### From Source
 
 ```bash
@@ -77,16 +118,30 @@ make build
 sudo mv kselect /usr/local/bin/
 ```
 
-### Or use `make install`
+Or use `make install`:
 
 ```bash
 make install
 ```
 
+### Shell Completion
+
+After installation, enable shell completion:
+
+```bash
+# Bash
+echo 'source <(kselect completion bash)' >> ~/.bashrc
+source ~/.bashrc
+
+# Zsh
+echo 'source <(kselect completion zsh)' >> ~/.zshrc
+source ~/.zshrc
+```
+
 ## Prerequisites
 
-- Go 1.21+
 - `~/.kube/config` configured with cluster access
+- Go 1.21+ (only for building from source)
 
 ## Usage
 
