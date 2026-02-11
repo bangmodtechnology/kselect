@@ -50,12 +50,16 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           go build -ldflags="-X main.Version=${VERSION}" \
-            -o kselect-${{ matrix.suffix }}${{ matrix.ext }} \
+            -o kselect${{ matrix.ext }} \
             ./cmd/kselect/
+
+      - name: Create archive
+        run: |
+          tar czf kselect-${{ matrix.suffix }}.tar.gz kselect${{ matrix.ext }}
 
       - name: Upload release asset
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload "${{ github.event.release.tag_name }}" \
-            kselect-${{ matrix.suffix }}${{ matrix.ext }}
+            kselect-${{ matrix.suffix }}.tar.gz
