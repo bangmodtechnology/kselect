@@ -1,8 +1,9 @@
 .PHONY: build install test clean release deps
 
 VERSION := 1.0.0
+CODENAME := Anchor
 BINARY := kselect
-LDFLAGS := -ldflags="-X main.Version=$(VERSION)"
+LDFLAGS := -ldflags="-X main.Version=$(VERSION) -X main.Codename=$(CODENAME)"
 
 build:
 	go build $(LDFLAGS) -o $(BINARY) ./cmd/kselect/

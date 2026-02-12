@@ -20,7 +20,10 @@ import (
 	_ "github.com/bangmodtechnology/kselect/pkg/registry"
 )
 
-var Version = "dev"
+var (
+	Version  = "dev"
+	Codename = ""
+)
 
 func main() {
 	// Extract flags from anywhere in args (Go flag stops at first non-flag arg)
@@ -54,7 +57,11 @@ func main() {
 	output.SetColorEnabled(useColor)
 
 	if *showVersion {
-		fmt.Printf("kselect version %s\n", Version)
+		if Codename != "" {
+			fmt.Printf("kselect version %s (%s)\n", Version, Codename)
+		} else {
+			fmt.Printf("kselect version %s\n", Version)
+		}
 		return
 	}
 

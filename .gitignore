@@ -62,6 +62,7 @@ ROADMAP.md
 RELEASE_CHECKLIST.md
 HOMEBREW_SETUP.md
 RELEASE_v*.md
+codename.md
 
 # Homebrew (managed in separate homebrew-tap repo)
 Formula/

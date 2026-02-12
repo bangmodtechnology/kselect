@@ -49,7 +49,8 @@ jobs:
           CGO_ENABLED: '0'
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          go build -ldflags="-X main.Version=${VERSION}" \
+          CODENAME="Anchor"
+          go build -ldflags="-X main.Version=${VERSION} -X main.Codename=${CODENAME}" \
             -o kselect${{ matrix.ext }} \
             ./cmd/kselect/
 
