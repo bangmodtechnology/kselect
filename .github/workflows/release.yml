@@ -10,7 +10,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Only repo admins can create releases, but double-check with environment protection
     environment: release
     strategy:
       matrix:
@@ -37,7 +36,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.23'
 
       - name: Run tests
         run: go test -v ./...
