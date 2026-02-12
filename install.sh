@@ -30,29 +30,36 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
-# Download binary
-BINARY="kselect-${OS}-${ARCH}"
-URL="https://github.com/$REPO/releases/download/$VERSION/$BINARY"
+# Download archive
+ARCHIVE="kselect-${OS}-${ARCH}.tar.gz"
+URL="https://github.com/$REPO/releases/download/$VERSION/$ARCHIVE"
 echo "Downloading kselect $VERSION for $OS/$ARCH..."
 
-TMP=$(mktemp)
-HTTP_CODE=$(curl -sSL -w "%{http_code}" -o "$TMP" "$URL")
+TMP_DIR=$(mktemp -d)
+TMP_ARCHIVE="$TMP_DIR/$ARCHIVE"
+HTTP_CODE=$(curl -sSL -w "%{http_code}" -o "$TMP_ARCHIVE" "$URL")
 if [ "$HTTP_CODE" != "200" ]; then
-    rm -f "$TMP"
+    rm -rf "$TMP_DIR"
     echo "Error: Download failed (HTTP $HTTP_CODE)"
     echo "URL: $URL"
     exit 1
 fi
 
-chmod +x "$TMP"
+# Extract binary
+echo "Extracting..."
+tar -xzf "$TMP_ARCHIVE" -C "$TMP_DIR"
+chmod +x "$TMP_DIR/kselect"
 
 # Install
 if [ -w "$INSTALL_DIR" ]; then
-    mv "$TMP" "$INSTALL_DIR/kselect"
+    mv "$TMP_DIR/kselect" "$INSTALL_DIR/kselect"
 else
     echo "Installing to $INSTALL_DIR (requires sudo)..."
-    sudo mv "$TMP" "$INSTALL_DIR/kselect"
+    sudo mv "$TMP_DIR/kselect" "$INSTALL_DIR/kselect"
 fi
+
+# Cleanup
+rm -rf "$TMP_DIR"
 
 echo ""
 echo "kselect $VERSION installed successfully!"
