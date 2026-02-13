@@ -28,11 +28,8 @@ var (
 func main() {
 	// Extract flags from anywhere in args (Go flag stops at first non-flag arg)
 	rawArgs := os.Args[1:]
-	flagArgs, queryArgs := splitArgs(rawArgs)
 
-	// Reset os.Args so flag.Parse() sees our extracted flags
-	os.Args = append([]string{os.Args[0]}, flagArgs...)
-
+	// Define all flags first
 	outputFormat := flag.String("o", "table", "Output format: table, json, yaml, csv, wide")
 	namespace := flag.String("n", "", "Namespace (like kubectl -n)")
 	allNamespaces := flag.Bool("A", false, "All namespaces (like kubectl -A)")
@@ -45,6 +42,15 @@ func main() {
 	interactive := flag.Bool("interactive", false, "Interactive REPL mode")
 	dryRun := flag.Bool("dry-run", false, "Validate query without executing")
 	describeResource := flag.String("describe", "", "Describe a resource schema")
+
+	// Build flag maps from definitions (auto-syncs with defined flags)
+	knownValueFlags, knownBoolFlags := buildFlagMaps()
+
+	// Split args using generated maps
+	flagArgs, queryArgs := splitArgs(rawArgs, knownValueFlags, knownBoolFlags)
+
+	// Reset os.Args so flag.Parse() sees our extracted flags
+	os.Args = append([]string{os.Args[0]}, flagArgs...)
 
 	flag.Parse()
 
@@ -216,29 +222,37 @@ func main() {
 	}
 }
 
-// knownFlags lists flags that take a value argument.
-var knownValueFlags = map[string]bool{
-	"-o": true, "--o": true,
-	"-n": true, "--n": true,
-	"-plugins": true, "--plugins": true,
-	"-interval": true, "--interval": true,
-	"-describe": true, "--describe": true,
-}
+// buildFlagMaps inspects all defined flags and creates lookup maps.
+// This ensures flag maps stay in sync with actual flag definitions.
+func buildFlagMaps() (valueFlags, boolFlags map[string]bool) {
+	valueFlags = make(map[string]bool)
+	boolFlags = make(map[string]bool)
 
-// knownBoolFlags lists boolean flags (no value).
-var knownBoolFlags = map[string]bool{
-	"-A": true, "--A": true,
-	"-watch": true, "--watch": true,
-	"-version": true, "--version": true,
-	"-list": true, "--list": true,
-	"-no-color": true, "--no-color": true,
-	"-interactive": true, "--interactive": true,
-	"-dry-run": true, "--dry-run": true,
+	// Define the boolFlag interface (from Go's flag package)
+	type boolFlag interface {
+		IsBoolFlag() bool
+	}
+
+	flag.VisitAll(func(f *flag.Flag) {
+		shortName := "-" + f.Name
+		longName := "--" + f.Name
+
+		// Check if it's a bool flag
+		if bf, ok := f.Value.(boolFlag); ok && bf.IsBoolFlag() {
+			boolFlags[shortName] = true
+			boolFlags[longName] = true
+		} else {
+			valueFlags[shortName] = true
+			valueFlags[longName] = true
+		}
+	})
+
+	return
 }
 
 // splitArgs separates flag arguments from query arguments.
 // This allows flags like --watch and -o json to appear anywhere in the command.
-func splitArgs(args []string) (flagArgs, queryArgs []string) {
+func splitArgs(args []string, knownValueFlags, knownBoolFlags map[string]bool) (flagArgs, queryArgs []string) {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 
