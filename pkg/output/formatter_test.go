@@ -51,6 +51,9 @@ func TestTruncate(t *testing.T) {
 }
 
 func TestPrintJSON(t *testing.T) {
+	SetColorEnabled(false)
+	defer SetColorEnabled(false)
+
 	var buf bytes.Buffer
 	f := &Formatter{format: FormatJSON, writer: &buf}
 

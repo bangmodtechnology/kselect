@@ -38,7 +38,9 @@ func (e *Executor) ExecuteWatch(query *parser.Query, interval time.Duration, for
 }
 
 func (e *Executor) runAndPrint(query *parser.Query, interval time.Duration, format output.Format) error {
+	start := time.Now()
 	results, fields, err := e.Execute(query)
+	elapsed := time.Since(start)
 	if err != nil {
 		return err
 	}
@@ -46,15 +48,17 @@ func (e *Executor) runAndPrint(query *parser.Query, interval time.Duration, form
 	// Clear screen
 	fmt.Print("\033[2J\033[H")
 
-	// Print header with timestamp
-	fmt.Printf("Every %s | %s | %s\n",
+	// Print header with timestamp and query duration
+	fmt.Printf("Every %s | %s | (%.2fs) | %s\n",
 		interval,
 		time.Now().Format("2006-01-02 15:04:05"),
+		elapsed.Seconds(),
 		buildQuerySummary(query),
 	)
 	fmt.Println(strings.Repeat("-", 80))
 
 	formatter := output.NewFormatter(format)
+	formatter.SetElapsed(elapsed)
 	return formatter.Print(results, fields)
 }
 

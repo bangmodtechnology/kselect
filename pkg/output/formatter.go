@@ -24,8 +24,9 @@ const (
 )
 
 type Formatter struct {
-	format Format
-	writer io.Writer
+	format  Format
+	writer  io.Writer
+	elapsed time.Duration
 }
 
 func NewFormatter(format Format) *Formatter {
@@ -33,6 +34,11 @@ func NewFormatter(format Format) *Formatter {
 		format: format,
 		writer: os.Stdout,
 	}
+}
+
+// SetElapsed sets the query execution duration to display in output footer.
+func (f *Formatter) SetElapsed(d time.Duration) {
+	f.elapsed = d
 }
 
 func (f *Formatter) Print(results []map[string]interface{}, fields []string) error {
@@ -53,15 +59,29 @@ func (f *Formatter) Print(results []map[string]interface{}, fields []string) err
 }
 
 func (f *Formatter) printJSON(results []map[string]interface{}) error {
-	encoder := json.NewEncoder(f.writer)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(results)
+	data, err := json.MarshalIndent(results, "", "  ")
+	if err != nil {
+		return err
+	}
+	s := string(data)
+	if colorEnabled {
+		s = HighlightJSON(s)
+	}
+	fmt.Fprintln(f.writer, s)
+	return nil
 }
 
 func (f *Formatter) printYAML(results []map[string]interface{}) error {
-	encoder := yaml.NewEncoder(f.writer)
-	defer encoder.Close()
-	return encoder.Encode(results)
+	data, err := yaml.Marshal(results)
+	if err != nil {
+		return err
+	}
+	s := strings.TrimRight(string(data), "\n")
+	if colorEnabled {
+		s = HighlightYAML(s)
+	}
+	fmt.Fprintln(f.writer, s)
+	return nil
 }
 
 func (f *Formatter) printCSV(results []map[string]interface{}, fields []string) error {
@@ -116,7 +136,7 @@ func (f *Formatter) printTable(results []map[string]interface{}, fields []string
 	}
 
 	w.Flush()
-	fmt.Fprintf(f.writer, "\n%d resource(s) found.\n", len(results))
+	f.printFooter(len(results))
 	return nil
 }
 
@@ -147,8 +167,17 @@ func (f *Formatter) printWide(results []map[string]interface{}, fields []string)
 	}
 
 	w.Flush()
-	fmt.Fprintf(f.writer, "\n%d resource(s) found.\n", len(results))
+	f.printFooter(len(results))
 	return nil
+}
+
+// printFooter prints the resource count line with optional elapsed time.
+func (f *Formatter) printFooter(count int) {
+	if f.elapsed > 0 {
+		fmt.Fprintf(f.writer, "\n%d resource(s) found. (%.2fs)\n", count, f.elapsed.Seconds())
+	} else {
+		fmt.Fprintf(f.writer, "\n%d resource(s) found.\n", count)
+	}
 }
 
 func formatFieldValue(val interface{}, fieldName string) string {

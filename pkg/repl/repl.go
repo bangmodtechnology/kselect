@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/bangmodtechnology/kselect/pkg/describe"
 	"github.com/bangmodtechnology/kselect/pkg/executor"
@@ -111,7 +112,12 @@ func (r *REPL) executeLine(line string) {
 	}
 
 	// Execute query
+	spin := output.NewSpinner(fmt.Sprintf("Fetching %s...", query.Resource))
+	spin.Start()
+	start := time.Now()
 	results, fields, err := r.executor.Execute(query)
+	elapsed := time.Since(start)
+	spin.Stop()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error executing query: %v\n", err)
 		return
@@ -119,6 +125,7 @@ func (r *REPL) executeLine(line string) {
 
 	// Format output
 	formatter := output.NewFormatter(r.outputFormat)
+	formatter.SetElapsed(elapsed)
 	if err := formatter.Print(results, fields); err != nil {
 		fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
 		return

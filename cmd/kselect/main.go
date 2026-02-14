@@ -14,6 +14,7 @@ import (
 	"github.com/bangmodtechnology/kselect/pkg/parser"
 	"github.com/bangmodtechnology/kselect/pkg/registry"
 	"github.com/bangmodtechnology/kselect/pkg/repl"
+	"github.com/bangmodtechnology/kselect/pkg/tui"
 	"github.com/bangmodtechnology/kselect/pkg/validator"
 
 	// Import resource definitions (auto-register via init())
@@ -55,6 +56,9 @@ func main() {
 	dryRun := flag.Bool("dry-run", false, "Validate query without executing")
 	flag.BoolVar(dryRun, "D", false, "Validate query without executing (shorthand)")
 
+	tuiMode := flag.Bool("tui", false, "Interactive TUI mode")
+	flag.BoolVar(tuiMode, "t", false, "Interactive TUI mode (shorthand)")
+
 	describeResource := flag.String("describe", "", "Describe a resource schema")
 	flag.StringVar(describeResource, "d", "", "Describe a resource schema (shorthand)")
 
@@ -77,7 +81,7 @@ func main() {
 
 	// Color: auto-detect TTY, respect --no-color flag
 	format := output.Format(*outputFormat)
-	useColor := !*noColor && output.DetectColor() && (format == output.FormatTable || format == output.FormatWide)
+	useColor := !*noColor && output.DetectColor() && format != output.FormatCSV
 	output.SetColorEnabled(useColor)
 
 	if *showHelp {
@@ -206,7 +210,10 @@ func main() {
 	}
 
 	// Create executor
+	connSpin := output.NewSpinner("Connecting to cluster...")
+	connSpin.Start()
 	exec, err := executor.NewExecutor()
+	connSpin.Stop()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error connecting to Kubernetes: %v\n", err)
 		os.Exit(1)
@@ -231,14 +238,29 @@ func main() {
 	}
 
 	// Single execution
+	spin := output.NewSpinner(fmt.Sprintf("Fetching %s...", query.Resource))
+	spin.Start()
+	start := time.Now()
 	results, fields, err := exec.Execute(query)
+	elapsed := time.Since(start)
+	spin.Stop()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error executing query: %v\n", err)
 		os.Exit(1)
 	}
 
+	// TUI mode
+	if *tuiMode {
+		if err := tui.Run(exec, query, results, fields, elapsed); err != nil {
+			fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	// Format output
 	formatter := output.NewFormatter(format)
+	formatter.SetElapsed(elapsed)
 	if err := formatter.Print(results, fields); err != nil {
 		fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
 		os.Exit(1)
@@ -342,6 +364,7 @@ func printHelp() {
 	fmt.Println("  -n namespace          Namespace (like kubectl -n, default: current context)")
 	fmt.Println("  -A                    All namespaces (like kubectl -A)")
 	fmt.Println("  -o format             Output format: table, json, yaml, csv, wide (default: table)")
+	fmt.Println("  -t, --tui             Interactive TUI table mode")
 	fmt.Println("  -i, --interactive     Interactive REPL mode")
 	fmt.Println("  -D, --dry-run         Validate query without executing")
 	fmt.Println("  -d, --describe res    Describe resource schema (e.g., -d pod)")
