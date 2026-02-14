@@ -1,6 +1,6 @@
 .PHONY: build install test clean release deps
 
-VERSION := 1.0.0
+VERSION := 1.0.1
 CODENAME := Anchor
 BINARY := kselect
 LDFLAGS := -ldflags="-X main.Version=$(VERSION) -X main.Codename=$(CODENAME)"

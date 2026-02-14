@@ -147,13 +147,15 @@ func (v *Validator) validateFields(resource *registry.ResourceDefinition, fields
 		// Resolve alias to canonical name
 		canonicalField := resource.ResolveFieldAlias(field)
 
-		// Check if field exists
+		// Check if field exists (including dot-notation map sub-fields like labels.app)
 		if _, ok := resource.Fields[canonicalField]; !ok {
-			// Find similar field names
-			suggestions := v.findSimilarFields(resource, field)
-			return &ValidationError{
-				Message:     fmt.Sprintf("Field '%s' not found in resource '%s'", field, resource.Name),
-				Suggestions: suggestions,
+			if _, _, ok := resource.IsMapSubField(canonicalField); !ok {
+				// Find similar field names
+				suggestions := v.findSimilarFields(resource, field)
+				return &ValidationError{
+					Message:     fmt.Sprintf("Field '%s' not found in resource '%s'", field, resource.Name),
+					Suggestions: suggestions,
+				}
 			}
 		}
 	}
@@ -176,12 +178,14 @@ func (v *Validator) validateConditionGroup(resource *registry.ResourceDefinition
 		// Resolve alias to canonical name
 		canonicalField := resource.ResolveFieldAlias(cond.Field)
 
-		// Check if field exists
+		// Check if field exists (including dot-notation map sub-fields)
 		if _, ok := resource.Fields[canonicalField]; !ok {
-			suggestions := v.findSimilarFields(resource, cond.Field)
-			return &ValidationError{
-				Message:     fmt.Sprintf("Field '%s' in WHERE clause not found in resource '%s'", cond.Field, resource.Name),
-				Suggestions: suggestions,
+			if _, _, ok := resource.IsMapSubField(canonicalField); !ok {
+				suggestions := v.findSimilarFields(resource, cond.Field)
+				return &ValidationError{
+					Message:     fmt.Sprintf("Field '%s' in WHERE clause not found in resource '%s'", cond.Field, resource.Name),
+					Suggestions: suggestions,
+				}
 			}
 		}
 	}
@@ -244,12 +248,14 @@ func (v *Validator) validateOrderBy(resource *registry.ResourceDefinition, order
 			// Resolve alias
 			canonicalField := resource.ResolveFieldAlias(ob.Field)
 
-			// Check if field exists in resource
+			// Check if field exists in resource (including dot-notation map sub-fields)
 			if _, ok := resource.Fields[canonicalField]; !ok {
-				suggestions := v.findSimilarFields(resource, ob.Field)
-				return &ValidationError{
-					Message:     fmt.Sprintf("Field '%s' in ORDER BY clause not found in resource '%s'", ob.Field, resource.Name),
-					Suggestions: suggestions,
+				if _, _, ok := resource.IsMapSubField(canonicalField); !ok {
+					suggestions := v.findSimilarFields(resource, ob.Field)
+					return &ValidationError{
+						Message:     fmt.Sprintf("Field '%s' in ORDER BY clause not found in resource '%s'", ob.Field, resource.Name),
+						Suggestions: suggestions,
+					}
 				}
 			}
 		}
@@ -264,12 +270,14 @@ func (v *Validator) validateGroupBy(resource *registry.ResourceDefinition, group
 		// Resolve alias
 		canonicalField := resource.ResolveFieldAlias(field)
 
-		// Check if field exists
+		// Check if field exists (including dot-notation map sub-fields)
 		if _, ok := resource.Fields[canonicalField]; !ok {
-			suggestions := v.findSimilarFields(resource, field)
-			return &ValidationError{
-				Message:     fmt.Sprintf("Field '%s' in GROUP BY clause not found in resource '%s'", field, resource.Name),
-				Suggestions: suggestions,
+			if _, _, ok := resource.IsMapSubField(canonicalField); !ok {
+				suggestions := v.findSimilarFields(resource, field)
+				return &ValidationError{
+					Message:     fmt.Sprintf("Field '%s' in GROUP BY clause not found in resource '%s'", field, resource.Name),
+					Suggestions: suggestions,
+				}
 			}
 		}
 	}
@@ -434,12 +442,14 @@ func (v *Validator) validateHavingGroup(resource *registry.ResourceDefinition, g
 				}
 			}
 
-			// Also validate that field exists
+			// Also validate that field exists (including dot-notation map sub-fields)
 			if _, ok := resource.Fields[canonicalField]; !ok {
-				suggestions := v.findSimilarFields(resource, cond.Field)
-				return &ValidationError{
-					Message:     fmt.Sprintf("Field '%s' in HAVING clause not found in resource '%s'", cond.Field, resource.Name),
-					Suggestions: suggestions,
+				if _, _, ok := resource.IsMapSubField(canonicalField); !ok {
+					suggestions := v.findSimilarFields(resource, cond.Field)
+					return &ValidationError{
+						Message:     fmt.Sprintf("Field '%s' in HAVING clause not found in resource '%s'", cond.Field, resource.Name),
+						Suggestions: suggestions,
+					}
 				}
 			}
 		}

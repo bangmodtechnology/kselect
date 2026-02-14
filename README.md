@@ -78,6 +78,7 @@ kselect --list
 - **HAVING clause:** Filter aggregated results
 - **DISTINCT:** Remove duplicate rows
 - **Field aliases:** Use `ns` for `namespace`, etc.
+- **Map sub-field access:** Use dot-notation to query map fields (e.g. `labels.app`, `selector.app`)
 
 ### 🧪 **Production Ready**
 - 78%+ test coverage
@@ -218,20 +219,21 @@ kselect [flags] fields FROM resource [WHERE conditions] [ORDER BY field] [LIMIT 
 
 ### Flags
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `-n` | Namespace (like `kubectl -n`) | current context |
-| `-A` | All namespaces (like `kubectl -A`) | |
-| `-o` | Output format: `table`, `json`, `yaml`, `csv`, `wide` | `table` |
-| `--interactive` | Interactive REPL mode | |
-| `--dry-run` | Validate query without executing | |
-| `--describe` | Describe resource schema (e.g., `--describe pod`) | |
-| `--list` | List available resources and fields | |
-| `--plugins` | Directory containing plugin YAML files | |
-| `--watch` | Watch mode: continuously refresh results | |
-| `--interval` | Watch refresh interval | `2s` |
-| `--no-color` | Disable color output | auto-detect TTY |
-| `--version` | Show version | |
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `-n` | | Namespace (like `kubectl -n`) | current context |
+| `-A` | | All namespaces (like `kubectl -A`) | |
+| `-o` | | Output format: `table`, `json`, `yaml`, `csv`, `wide` | `table` |
+| `--interactive` | `-i` | Interactive REPL mode | |
+| `--dry-run` | `-D` | Validate query without executing | |
+| `--describe` | `-d` | Describe resource schema (e.g., `-d pod`) | |
+| `--list` | `-l` | List available resources and fields | |
+| `--plugins` | `-p` | Directory containing plugin YAML files | |
+| `--watch` | `-w` | Watch mode: continuously refresh results | |
+| `--interval` | | Watch refresh interval | `2s` |
+| `--no-color` | | Disable color output | auto-detect TTY |
+| `--version` | `-v` | Show version | |
+| `--help` | `-h` | Show help | |
 
 ### Namespace Resolution
 
@@ -635,6 +637,29 @@ kselect * FROM pod WHERE namespace=default
 ```
 
 Aliases work in WHERE, ORDER BY, GROUP BY, and HAVING clauses.
+
+## Map Sub-Field Access (Dot-Notation)
+
+Fields with type `map` (like `labels`, `selector`, `data-keys`) support dot-notation to access individual keys:
+
+```bash
+# Query specific label values
+kselect name,labels.app,labels.env FROM pod WHERE namespace=default
+
+# Filter by label value
+kselect name,status FROM pod WHERE labels.app=nginx
+
+# Sort by label
+kselect name,labels.tier FROM pod ORDER BY labels.tier
+
+# Group by label
+kselect labels.app, COUNT as total FROM pod GROUP BY labels.app
+
+# Works with service selectors too
+kselect name,selector.app FROM service WHERE namespace=default
+```
+
+Map sub-fields return `<none>` when the key doesn't exist on a resource. Dot-notation works in SELECT fields, WHERE, ORDER BY, GROUP BY, and HAVING clauses.
 
 ## Shell Quoting
 

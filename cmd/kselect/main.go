@@ -34,14 +34,32 @@ func main() {
 	namespace := flag.String("n", "", "Namespace (like kubectl -n)")
 	allNamespaces := flag.Bool("A", false, "All namespaces (like kubectl -A)")
 	noColor := flag.Bool("no-color", false, "Disable color output")
+
 	showVersion := flag.Bool("version", false, "Show version")
+	flag.BoolVar(showVersion, "v", false, "Show version (shorthand)")
+
 	listResources := flag.Bool("list", false, "List available resources and fields")
+	flag.BoolVar(listResources, "l", false, "List available resources and fields (shorthand)")
+
 	pluginDir := flag.String("plugins", "", "Directory containing plugin YAML files")
+	flag.StringVar(pluginDir, "p", "", "Directory containing plugin YAML files (shorthand)")
+
 	watch := flag.Bool("watch", false, "Watch mode: continuously refresh results")
+	flag.BoolVar(watch, "w", false, "Watch mode (shorthand)")
+
 	interval := flag.Duration("interval", 2*time.Second, "Watch refresh interval")
+
 	interactive := flag.Bool("interactive", false, "Interactive REPL mode")
+	flag.BoolVar(interactive, "i", false, "Interactive REPL mode (shorthand)")
+
 	dryRun := flag.Bool("dry-run", false, "Validate query without executing")
+	flag.BoolVar(dryRun, "D", false, "Validate query without executing (shorthand)")
+
 	describeResource := flag.String("describe", "", "Describe a resource schema")
+	flag.StringVar(describeResource, "d", "", "Describe a resource schema (shorthand)")
+
+	showHelp := flag.Bool("help", false, "Show help")
+	flag.BoolVar(showHelp, "h", false, "Show help (shorthand)")
 
 	// Build flag maps from definitions (auto-syncs with defined flags)
 	knownValueFlags, knownBoolFlags := buildFlagMaps()
@@ -61,6 +79,11 @@ func main() {
 	format := output.Format(*outputFormat)
 	useColor := !*noColor && output.DetectColor() && (format == output.FormatTable || format == output.FormatWide)
 	output.SetColorEnabled(useColor)
+
+	if *showHelp {
+		printHelp()
+		return
+	}
 
 	if *showVersion {
 		if Codename != "" {
@@ -316,18 +339,18 @@ func printHelp() {
 	fmt.Println("  Example: kselect FROM pod WHERE namespace=default")
 	fmt.Println()
 	fmt.Println("Flags:")
-	fmt.Println("  -n namespace    Namespace (like kubectl -n, default: current context)")
-	fmt.Println("  -A              All namespaces (like kubectl -A)")
-	fmt.Println("  -o string       Output format: table, json, yaml, csv, wide (default: table)")
-	fmt.Println("  -interactive    Interactive REPL mode")
-	fmt.Println("  -dry-run        Validate query without executing")
-	fmt.Println("  -describe res   Describe resource schema (e.g., -describe pod)")
-	fmt.Println("  -list           List available resources and fields")
-	fmt.Println("  -plugins dir    Directory containing plugin YAML files")
-	fmt.Println("  -watch          Watch mode: continuously refresh results")
-	fmt.Println("  -interval dur   Watch refresh interval (default: 2s)")
-	fmt.Println("  -no-color       Disable color output (auto-detects TTY)")
-	fmt.Println("  -version        Show version")
+	fmt.Println("  -n namespace          Namespace (like kubectl -n, default: current context)")
+	fmt.Println("  -A                    All namespaces (like kubectl -A)")
+	fmt.Println("  -o format             Output format: table, json, yaml, csv, wide (default: table)")
+	fmt.Println("  -i, --interactive     Interactive REPL mode")
+	fmt.Println("  -D, --dry-run         Validate query without executing")
+	fmt.Println("  -d, --describe res    Describe resource schema (e.g., -d pod)")
+	fmt.Println("  -l, --list            List available resources and fields")
+	fmt.Println("  -p, --plugins dir     Directory containing plugin YAML files")
+	fmt.Println("  -w, --watch           Watch mode: continuously refresh results")
+	fmt.Println("      --interval dur    Watch refresh interval (default: 2s)")
+	fmt.Println("      --no-color        Disable color output (auto-detects TTY)")
+	fmt.Println("  -v, --version         Show version")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  # Basic query (uses current context namespace)")

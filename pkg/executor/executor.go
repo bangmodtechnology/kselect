@@ -84,6 +84,9 @@ func (e *Executor) Execute(query *parser.Query) ([]map[string]interface{}, []str
 	// Resolve fields (expand * to all fields)
 	fields := e.resolveFields(query, resDef)
 
+	// Collect dynamic map sub-fields (e.g. "labels.app") from query
+	dynamicMapFields := collectDynamicMapFields(query, resDef)
+
 	// Resolve subqueries in WHERE conditions (execute once, cache results)
 	if query.Conditions != nil {
 		if err := e.resolveSubQueries(query.Conditions, query); err != nil {
@@ -95,6 +98,11 @@ func (e *Executor) Execute(query *parser.Query) ([]map[string]interface{}, []str
 	var results []map[string]interface{}
 	for _, item := range items {
 		row := e.extractRow(&item, resDef, fields)
+
+		// Extract dynamic map sub-fields (e.g. labels.app from the labels map)
+		if len(dynamicMapFields) > 0 {
+			extractDynamicMapFields(row, dynamicMapFields, resDef)
+		}
 
 		// Always include namespace for filtering even if not in selected fields
 		if _, has := row["namespace"]; !has {
@@ -179,6 +187,11 @@ func (e *Executor) resolveFields(query *parser.Query, resDef *registry.ResourceD
 	hasValidField := false
 	for _, f := range query.Fields {
 		if _, ok := resDef.Fields[f]; ok {
+			hasValidField = true
+			break
+		}
+		// Accept dot-notation map sub-fields (e.g. "labels.app")
+		if _, _, ok := resDef.IsMapSubField(f); ok {
 			hasValidField = true
 			break
 		}
@@ -374,6 +387,64 @@ func resolveConditionAliases(group *parser.ConditionGroup, resDef *registry.Reso
 	}
 	for _, sub := range group.SubGroups {
 		resolveConditionAliases(sub, resDef)
+	}
+}
+
+// collectDynamicMapFields scans the query for dot-notation fields that reference
+// map-type fields (e.g. "labels.app"). Returns a deduplicated list.
+func collectDynamicMapFields(query *parser.Query, resDef *registry.ResourceDefinition) []string {
+	seen := make(map[string]bool)
+	var result []string
+
+	add := func(field string) {
+		if _, _, ok := resDef.IsMapSubField(field); ok && !seen[field] {
+			seen[field] = true
+			result = append(result, field)
+		}
+	}
+
+	for _, f := range query.Fields {
+		add(f)
+	}
+	if query.Conditions != nil {
+		collectDynamicMapFieldsFromConditions(query.Conditions, resDef, &result, seen)
+	}
+	for _, ob := range query.OrderBy {
+		add(ob.Field)
+	}
+	for _, gb := range query.GroupBy {
+		add(gb)
+	}
+	return result
+}
+
+func collectDynamicMapFieldsFromConditions(group *parser.ConditionGroup, resDef *registry.ResourceDefinition, result *[]string, seen map[string]bool) {
+	for _, cond := range group.Conditions {
+		if _, _, ok := resDef.IsMapSubField(cond.Field); ok && !seen[cond.Field] {
+			seen[cond.Field] = true
+			*result = append(*result, cond.Field)
+		}
+	}
+	for _, sub := range group.SubGroups {
+		collectDynamicMapFieldsFromConditions(sub, resDef, result, seen)
+	}
+}
+
+// extractDynamicMapFields populates the row with flattened map sub-field values.
+// e.g. if dynamicFields contains "labels.app", it extracts the "app" key from the labels map.
+func extractDynamicMapFields(row map[string]interface{}, dynamicFields []string, resDef *registry.ResourceDefinition) {
+	for _, f := range dynamicFields {
+		baseName, subKey, _ := resDef.IsMapSubField(f)
+		baseVal := row[baseName]
+		if m, ok := baseVal.(map[string]interface{}); ok {
+			if v, exists := m[subKey]; exists {
+				row[f] = fmt.Sprintf("%v", v)
+			} else {
+				row[f] = "<none>"
+			}
+		} else {
+			row[f] = "<none>"
+		}
 	}
 }
 
