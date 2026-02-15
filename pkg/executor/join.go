@@ -2,9 +2,11 @@ package executor
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/bangmodtechnology/kselect/pkg/parser"
+	"github.com/bangmodtechnology/kselect/pkg/registry"
 )
 
 func (e *Executor) executeJoin(query *parser.Query) ([]map[string]interface{}, []string, error) {
@@ -73,8 +75,8 @@ func (e *Executor) executeJoin(query *parser.Query) ([]map[string]interface{}, [
 		results = performJoin(results, joinRows, join)
 	}
 
-	// Resolve output fields
-	fields := resolveJoinFields(query)
+	// Resolve output fields (expand * using registry)
+	fields := resolveJoinFields(query, e.registry)
 
 	// Apply WHERE conditions
 	if query.Conditions != nil {
@@ -98,44 +100,62 @@ func (e *Executor) executeJoin(query *parser.Query) ([]map[string]interface{}, [
 	return results, fields, nil
 }
 
+// performJoin uses a hash join strategy for O(n+m) performance.
 func performJoin(left, right []map[string]interface{}, join parser.JoinClause) []map[string]interface{} {
+	conditions := join.Conditions
+	// Backward compat: if Conditions is empty, fall back to single LeftField/RightField
+	if len(conditions) == 0 && join.LeftField != "" {
+		conditions = []parser.JoinCondition{{LeftField: join.LeftField, RightField: join.RightField}}
+	}
+
 	var results []map[string]interface{}
 
 	switch join.Type {
 	case parser.InnerJoin:
+		// Build hash index on right rows keyed by right-side ON fields
+		rightIndex := buildRightIndex(right, conditions)
 		for _, lRow := range left {
-			for _, rRow := range right {
-				if matchJoinCondition(lRow, rRow, join) {
-					results = append(results, mergeRows(lRow, rRow))
-				}
+			key := buildJoinKey(lRow, conditions, true)
+			if key == "" {
+				continue
+			}
+			for _, rRow := range rightIndex[key] {
+				results = append(results, mergeRows(lRow, rRow))
 			}
 		}
 
 	case parser.LeftJoin:
+		rightIndex := buildRightIndex(right, conditions)
 		for _, lRow := range left {
-			matched := false
-			for _, rRow := range right {
-				if matchJoinCondition(lRow, rRow, join) {
+			key := buildJoinKey(lRow, conditions, true)
+			matches := rightIndex[key]
+			if key != "" && len(matches) > 0 {
+				for _, rRow := range matches {
 					results = append(results, mergeRows(lRow, rRow))
-					matched = true
 				}
-			}
-			if !matched {
-				results = append(results, lRow)
+			} else {
+				results = append(results, copyRow(lRow))
 			}
 		}
 
 	case parser.RightJoin:
-		for _, rRow := range right {
-			matched := false
-			for _, lRow := range left {
-				if matchJoinCondition(lRow, rRow, join) {
+		// Build hash index on left rows keyed by left-side ON fields
+		leftIndex := buildLeftIndex(left, conditions)
+		matchedRight := make(map[int]bool)
+		for i, rRow := range right {
+			key := buildJoinKey(rRow, conditions, false)
+			matches := leftIndex[key]
+			if key != "" && len(matches) > 0 {
+				matchedRight[i] = true
+				for _, lRow := range matches {
 					results = append(results, mergeRows(lRow, rRow))
-					matched = true
 				}
 			}
-			if !matched {
-				results = append(results, rRow)
+		}
+		// Include unmatched right rows
+		for i, rRow := range right {
+			if !matchedRight[i] {
+				results = append(results, copyRow(rRow))
 			}
 		}
 	}
@@ -143,15 +163,70 @@ func performJoin(left, right []map[string]interface{}, join parser.JoinClause) [
 	return results
 }
 
-func matchJoinCondition(left, right map[string]interface{}, join parser.JoinClause) bool {
-	leftVal := resolveFieldValue(left, join.LeftField)
-	rightVal := resolveFieldValue(right, join.RightField)
-
-	if leftVal == nil || rightVal == nil {
-		return false
+// buildRightIndex creates a hash map from right rows keyed by their ON field values.
+func buildRightIndex(rows []map[string]interface{}, conditions []parser.JoinCondition) map[string][]map[string]interface{} {
+	index := make(map[string][]map[string]interface{})
+	for _, row := range rows {
+		key := buildJoinKey(row, conditions, false)
+		if key != "" {
+			index[key] = append(index[key], row)
+		}
 	}
+	return index
+}
 
-	return fmt.Sprintf("%v", leftVal) == fmt.Sprintf("%v", rightVal)
+// buildLeftIndex creates a hash map from left rows keyed by their ON field values.
+func buildLeftIndex(rows []map[string]interface{}, conditions []parser.JoinCondition) map[string][]map[string]interface{} {
+	index := make(map[string][]map[string]interface{})
+	for _, row := range rows {
+		key := buildJoinKey(row, conditions, true)
+		if key != "" {
+			index[key] = append(index[key], row)
+		}
+	}
+	return index
+}
+
+// buildJoinKey builds a composite key from the ON condition fields.
+// isLeft=true uses LeftField, isLeft=false uses RightField.
+// Uses \x00 as separator to prevent collisions between field values.
+func buildJoinKey(row map[string]interface{}, conditions []parser.JoinCondition, isLeft bool) string {
+	parts := make([]string, len(conditions))
+	for i, cond := range conditions {
+		field := cond.RightField
+		if isLeft {
+			field = cond.LeftField
+		}
+		val := resolveFieldValue(row, field)
+		if val == nil {
+			return ""
+		}
+		parts[i] = fmt.Sprintf("%v", val)
+	}
+	return strings.Join(parts, "\x00")
+}
+
+// matchJoinConditions checks all conditions (AND semantics).
+func matchJoinConditions(left, right map[string]interface{}, conditions []parser.JoinCondition) bool {
+	for _, cond := range conditions {
+		leftVal := resolveFieldValue(left, cond.LeftField)
+		rightVal := resolveFieldValue(right, cond.RightField)
+		if leftVal == nil || rightVal == nil {
+			return false
+		}
+		if fmt.Sprintf("%v", leftVal) != fmt.Sprintf("%v", rightVal) {
+			return false
+		}
+	}
+	return true
+}
+
+func copyRow(row map[string]interface{}) map[string]interface{} {
+	cp := make(map[string]interface{}, len(row))
+	for k, v := range row {
+		cp[k] = v
+	}
+	return cp
 }
 
 func resolveFieldValue(row map[string]interface{}, field string) interface{} {
@@ -180,7 +255,7 @@ func resolveFieldValue(row map[string]interface{}, field string) interface{} {
 }
 
 func mergeRows(left, right map[string]interface{}) map[string]interface{} {
-	merged := make(map[string]interface{})
+	merged := make(map[string]interface{}, len(left)+len(right))
 	for k, v := range left {
 		merged[k] = v
 	}
@@ -190,9 +265,57 @@ func mergeRows(left, right map[string]interface{}) map[string]interface{} {
 	return merged
 }
 
-func resolveJoinFields(query *parser.Query) []string {
-	if len(query.Fields) == 1 && query.Fields[0] == "*" {
-		return []string{"*"}
+// resolveJoinFields expands * into prefixed field names from all joined resources.
+func resolveJoinFields(query *parser.Query, reg *registry.Registry) []string {
+	if len(query.Fields) != 1 || query.Fields[0] != "*" {
+		return query.Fields
 	}
-	return query.Fields
+
+	var fields []string
+
+	// Primary resource fields
+	prefix := query.Resource
+	if query.ResourceAlias != "" {
+		prefix = query.ResourceAlias
+	}
+	if primaryDef, ok := reg.Get(query.Resource); ok {
+		fields = append(fields, allFieldNames(primaryDef, prefix)...)
+	}
+
+	// Join resource fields
+	for _, join := range query.Joins {
+		jPrefix := join.Resource
+		if join.Alias != "" {
+			jPrefix = join.Alias
+		}
+		if joinDef, ok := reg.Get(join.Resource); ok {
+			fields = append(fields, allFieldNames(joinDef, jPrefix)...)
+		}
+	}
+
+	return fields
+}
+
+// allFieldNames returns "prefix.field" names for a resource definition.
+// Uses DefaultFields if available, otherwise returns all fields sorted.
+func allFieldNames(def *registry.ResourceDefinition, prefix string) []string {
+	if len(def.DefaultFields) > 0 {
+		result := make([]string, len(def.DefaultFields))
+		for i, f := range def.DefaultFields {
+			result[i] = prefix + "." + f
+		}
+		return result
+	}
+
+	names := make([]string, 0, len(def.Fields))
+	for name := range def.Fields {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	result := make([]string, len(names))
+	for i, name := range names {
+		result[i] = prefix + "." + name
+	}
+	return result
 }

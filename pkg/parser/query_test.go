@@ -415,3 +415,72 @@ func TestParseMultipleOrderBy(t *testing.T) {
 		t.Errorf("Expected 'name DESC', got field=%s desc=%v", query.OrderBy[1].Field, query.OrderBy[1].Descending)
 	}
 }
+
+func TestParseJoinSingleCondition(t *testing.T) {
+	query, err := Parse("pod.name,svc.name FROM pod p INNER JOIN service svc ON p.name = svc.name")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if len(query.Joins) != 1 {
+		t.Fatalf("Expected 1 join, got %d", len(query.Joins))
+	}
+	j := query.Joins[0]
+	if j.Type != InnerJoin {
+		t.Errorf("Expected INNER join, got %s", j.Type)
+	}
+	if j.Resource != "service" {
+		t.Errorf("Expected resource 'service', got '%s'", j.Resource)
+	}
+	if j.Alias != "svc" {
+		t.Errorf("Expected alias 'svc', got '%s'", j.Alias)
+	}
+	if len(j.Conditions) != 1 {
+		t.Fatalf("Expected 1 condition, got %d", len(j.Conditions))
+	}
+	if j.Conditions[0].LeftField != "p.name" || j.Conditions[0].RightField != "svc.name" {
+		t.Errorf("Expected p.name = svc.name, got %s = %s", j.Conditions[0].LeftField, j.Conditions[0].RightField)
+	}
+	// Backward compat fields
+	if j.LeftField != "p.name" || j.RightField != "svc.name" {
+		t.Errorf("Backward compat: expected LeftField/RightField to match first condition")
+	}
+}
+
+func TestParseJoinMultipleConditions(t *testing.T) {
+	query, err := Parse("pod.name FROM pod p INNER JOIN service svc ON p.name = svc.name AND p.namespace = svc.namespace")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if len(query.Joins) != 1 {
+		t.Fatalf("Expected 1 join, got %d", len(query.Joins))
+	}
+	j := query.Joins[0]
+	if len(j.Conditions) != 2 {
+		t.Fatalf("Expected 2 conditions, got %d", len(j.Conditions))
+	}
+	if j.Conditions[0].LeftField != "p.name" || j.Conditions[0].RightField != "svc.name" {
+		t.Errorf("Condition 0: expected p.name = svc.name, got %s = %s", j.Conditions[0].LeftField, j.Conditions[0].RightField)
+	}
+	if j.Conditions[1].LeftField != "p.namespace" || j.Conditions[1].RightField != "svc.namespace" {
+		t.Errorf("Condition 1: expected p.namespace = svc.namespace, got %s = %s", j.Conditions[1].LeftField, j.Conditions[1].RightField)
+	}
+}
+
+func TestParseJoinWithWhere(t *testing.T) {
+	query, err := Parse("pod.name,svc.name FROM pod p INNER JOIN service svc ON p.name = svc.name WHERE status=Running ORDER BY pod.name LIMIT 5")
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if len(query.Joins) != 1 {
+		t.Fatalf("Expected 1 join, got %d", len(query.Joins))
+	}
+	if query.Conditions == nil {
+		t.Fatal("Expected WHERE conditions")
+	}
+	if len(query.OrderBy) != 1 || query.OrderBy[0].Field != "pod.name" {
+		t.Errorf("Expected ORDER BY pod.name, got %v", query.OrderBy)
+	}
+	if query.Limit != 5 {
+		t.Errorf("Expected LIMIT 5, got %d", query.Limit)
+	}
+}

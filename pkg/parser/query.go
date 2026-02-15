@@ -14,10 +14,17 @@ const (
 	RightJoin JoinType = "RIGHT"
 )
 
+type JoinCondition struct {
+	LeftField  string
+	RightField string
+}
+
 type JoinClause struct {
-	Type      JoinType
-	Resource  string
-	Alias     string
+	Type       JoinType
+	Resource   string
+	Alias      string
+	Conditions []JoinCondition
+	// Deprecated: use Conditions instead. Kept for backward compatibility.
 	LeftField  string
 	RightField string
 }
@@ -238,38 +245,76 @@ func parseFromAndClauses(query *Query, rest string) error {
 }
 
 func parseJoins(query *Query, input string) (string, error) {
-	joinRe := regexp.MustCompile(`(?i)(INNER|LEFT|RIGHT)\s+JOIN\s+(\w+)(?:\s+(\w+))?\s+ON\s+(\S+)\s*=\s*(\S+)`)
+	// Phase 1: match JOIN header (type + resource + optional alias + ON keyword)
+	headerRe := regexp.MustCompile(`(?i)(INNER|LEFT|RIGHT)\s+JOIN\s+(\w+)(?:\s+(\w+))?\s+ON\s+`)
 	remaining := input
 
 	for {
-		matches := joinRe.FindStringSubmatchIndex(remaining)
-		if matches == nil {
+		loc := headerRe.FindStringSubmatchIndex(remaining)
+		if loc == nil {
 			break
 		}
 
-		fullMatch := remaining[matches[0]:matches[1]]
-		joinType := strings.ToUpper(remaining[matches[2]:matches[3]])
-		resource := remaining[matches[4]:matches[5]]
+		joinType := strings.ToUpper(remaining[loc[2]:loc[3]])
+		resource := remaining[loc[4]:loc[5]]
 		alias := ""
-		if matches[6] != -1 {
-			alias = remaining[matches[6]:matches[7]]
+		if loc[6] != -1 {
+			alias = remaining[loc[6]:loc[7]]
 		}
-		leftField := remaining[matches[8]:matches[9]]
-		rightField := remaining[matches[10]:matches[11]]
+
+		// Phase 2: parse ON conditions after the header
+		afterOn := remaining[loc[1]:]
+		conditions, consumed := parseJoinConditions(afterOn)
+		if len(conditions) == 0 {
+			return "", fmt.Errorf("invalid JOIN: expected condition after ON")
+		}
 
 		join := JoinClause{
 			Type:       JoinType(joinType),
 			Resource:   strings.ToLower(resource),
 			Alias:      alias,
-			LeftField:  leftField,
-			RightField: rightField,
+			Conditions: conditions,
+			// Backward compat: populate single-field shortcuts from first condition
+			LeftField:  conditions[0].LeftField,
+			RightField: conditions[0].RightField,
 		}
 		query.Joins = append(query.Joins, join)
-		remaining = strings.Replace(remaining, fullMatch, "", 1)
+
+		// Remove the matched JOIN clause from remaining
+		remaining = remaining[:loc[0]] + remaining[loc[1]+consumed:]
 		remaining = strings.TrimSpace(remaining)
 	}
 
 	return remaining, nil
+}
+
+// parseJoinConditions parses "field = field (AND field = field)*" and returns
+// the conditions and how many bytes were consumed from the input.
+func parseJoinConditions(input string) ([]JoinCondition, int) {
+	condRe := regexp.MustCompile(`^\s*(\S+)\s*=\s*(\S+)`)
+	andRe := regexp.MustCompile(`(?i)^\s+AND\s+`)
+	var conditions []JoinCondition
+	pos := 0
+
+	for {
+		m := condRe.FindStringSubmatchIndex(input[pos:])
+		if m == nil {
+			break
+		}
+		left := input[pos+m[2] : pos+m[3]]
+		right := input[pos+m[4] : pos+m[5]]
+		conditions = append(conditions, JoinCondition{LeftField: left, RightField: right})
+		pos += m[1]
+
+		// Check for AND keyword
+		a := andRe.FindStringIndex(input[pos:])
+		if a == nil {
+			break
+		}
+		pos += a[1]
+	}
+
+	return conditions, pos
 }
 
 func parseWhere(query *Query, input string) (string, error) {
